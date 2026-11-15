@@ -934,4 +934,29 @@
     renderChart();
     save();
   }, 10000);
+  async function loadJSONSessions() {
+    const response = await fetch('../session.json');
+    const records = await response.json();
+
+    state.sessions = records.map((record, index) => {
+      const start = new Date(record.start_time.replace(' ', 'T')).getTime();
+      const end = new Date(record.end_time.replace(' ', 'T')).getTime();
+
+      return {
+        id: 'json-' + index,
+        start,
+        end,
+        seatedMs: record.duration_seconds * 1000,
+        seatedSince: null,
+        awaySince: null,
+        intervals: [{ start, end }],
+        breaks: [],
+        sample: false,
+      };
+    });
+
+    save();
+    renderAll();
+  }
+  loadJSONSessions();
 })();
