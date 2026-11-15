@@ -44,6 +44,14 @@
     ></script>
   </head>
   <body>
+    <div
+      role="note"
+      class="sensor-demo-notice"
+    >
+      PROTOTYPE DEMO · Moisture-triggered input substitutes for the broken seat sensor. Live
+      durations record sensor activation, not verified sitting. The plate can remain active after
+      someone leaves.
+    </div>
     <!-- ============================================================
      ICON LIBRARY
      A hidden list of small icons. Elsewhere in the page, an icon
@@ -600,7 +608,7 @@
                     fill="#52697f"
                     font-family="monospace"
                   >
-                    FSR 01
+                    SENSOR 01
                   </text>
                 </svg>
                 <!-- app.js updates the occupancy message when pressure changes -->
@@ -610,7 +618,7 @@
                 </div>
                 <div class="stage-bottom">
                   <span><i></i> <span id="signalSourceCaption">Browser-preview signal</span></span
-                  ><span>1 FSR · OCCUPANCY</span>
+                  ><span>MOISTURE INPUT · DEMO</span>
                 </div>
               </div>
               <!-- Single raw ADC input with a threshold marker. This is not a weight measurement. -->
@@ -645,7 +653,8 @@
                   ></span>
                 </div>
                 <div class="fsr-signal-labels">
-                  <span>Sitting threshold: 500 ADC</span><span>ADC range: 0–4095 · not weight</span>
+                  <span>Active at or below 2000 ADC · calibrate first</span
+                  ><span>ADC range: 0–4095 · not pressure</span>
                 </div>
               </div>
               <!-- Manual demo controls. They simulate occupancy without changing real hardware. -->
@@ -1023,6 +1032,56 @@
               </button>
             </article>
           </div>
+          <article class="card comparison-card">
+            <span class="eyebrow">COMPARE YOUR SESSIONS</span>
+            <h2>Your sitting duration, session by session.</h2>
+            <p>Last 12 completed sessions. The list below orders these from shortest to longest.</p>
+            <div id="sessionComparison"></div>
+          </article>
+          <article class="card comparison-card">
+            <span class="eyebrow">ACTIVITY + SITTING BALANCE</span>
+            <h2>Your PASTBI calculator.</h2>
+            <p>PASTBI = physical activity (minutes/day) ÷ sitting time (hours/day).</p>
+            <div class="pastbi-inputs">
+              <label
+                >Physical activity (minutes/day)<input
+                  id="pastbiActivity"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  step="any"
+                  placeholder="30"
+              /></label>
+              <label
+                >Total sitting (hours/day)<input
+                  id="pastbiSitting"
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="any"
+                  placeholder="8"
+              /></label>
+            </div>
+            <p
+              id="pastbiResult"
+              aria-live="polite"
+            >
+              Enter both daily totals to calculate your balance index.
+            </p>
+            <p>
+              Example: 30 minutes ÷ 8 hours = 3.75. Enter totals for the same day. Your cushion
+              records only sitting on this seat, not all daily sitting or physical activity.
+            </p>
+            <p>
+              This ratio is educational, not a diagnosis or personal mortality-risk prediction.
+              <a
+                href="https://pubmed.ncbi.nlm.nih.gov/39053656/"
+                target="_blank"
+                rel="noopener"
+                >Botlero et al., 2024 · Read the study</a
+              >.
+            </p>
+          </article>
           <!-- Three short explanation cards: how time is counted, what pressure data means, and how data is stored -->
           <div class="insight-notes">
             <article class="card">
@@ -1338,10 +1397,10 @@
               <div class="device-icon">
                 <svg><use href="#i-mat" /></svg>
               </div>
-              <span class="eyebrow">ONE FSR / ESP32</span>
+              <span class="eyebrow">MOISTURE-TRIGGERED DEMO / ESP32</span>
               <h2>Your cushion connection.</h2>
               <p>
-                One pressure signal estimates whether the seat is occupied. No posture grading or
+                This substitute sensor detects moisture, not occupancy. No posture grading or
                 side-to-side measurements.
               </p>
               <dl>
@@ -1354,12 +1413,12 @@
                   <dd id="hardwareConnectionValue">Not connected</dd>
                 </div>
                 <div>
-                  <dt>FSR / motor pins</dt>
+                  <dt>Analog input / motor pins</dt>
                   <dd>GPIO 36 / GPIO 2</dd>
                 </div>
                 <div>
                   <dt>Threshold / range</dt>
-                  <dd>500 / 0–4095 ADC</dd>
+                  <dd>Active ≤ 2000 / 0–4095 ADC · provisional threshold</dd>
                 </div>
                 <div>
                   <dt>Serial / sample rate</dt>
@@ -1491,13 +1550,13 @@
               <label for="intervalInput"
                 >Movement reminder interval<small
                   >Browser-preview interval. For hardware, Python schedules the cue automatically
-                  (20 seconds by default), even when this page is closed.</small
+                  (30 seconds by default), even when this page is closed.</small
                 ></label
               ><select
                 id="intervalInput"
                 name="reminderMs"
               >
-                <option value="20000">Demo · 20 seconds</option>
+                <option value="30000">Demo · 30 seconds</option>
                 <option value="1800000">Everyday · 30 minutes</option>
               </select>
             </div>

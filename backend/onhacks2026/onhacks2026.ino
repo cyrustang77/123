@@ -1,25 +1,36 @@
 
  // --- PIN DEFINITIONS ---
-const int FSR_PIN = 36;
+const int SENSOR_PIN = 36; // Moisture module AO, powered from 3.3 V; common ground.
 const int MOTOR_PIN = 2;
 
 // --- SETTINGS ---
-const int PRESSURE_THRESHOLD = 500;
+const int SENSOR_THRESHOLD = 2000; // Starting point only: calibrate dry versus damp AO.
 const unsigned long SAMPLE_INTERVAL_MS = 250;
 const unsigned long VIBRATE_MS = 500;
 const unsigned long REST_MS = 500;
 const unsigned long BREAK_DURATION_MS = 5000;
+const unsigned long REMINDER_MS = 30000; // 30 seconds continuously seated.
 
 // --- STATE TRACKING ---
 unsigned long lastSampleTime = 0;
 unsigned long lastMotorToggle = 0;
 unsigned long belowThresholdStart = 0;
+unsigned long sittingStart = 0;
+bool sittingTiming = false;
 
 bool vibrationActive = false;
 bool motorOn = false;
 bool belowThresholdTiming = false;
 
 String commandBuffer = "";
+
+void startVibration(unsigned long now) {
+  if (vibrationActive) return;
+  vibrationActive = true;
+  motorOn = true;
+  lastMotorToggle = now;
+  digitalWrite(MOTOR_PIN, HIGH);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -33,13 +44,13 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // 1. READ PRESSURE SENSOR
-  static int pressure = 0;
+  // 1. READ ANALOG SENSOR (dry usually high, moisture usually low).
+  static int pressure = 4095; // Start inactive until the first sample.
 
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS) {
     lastSampleTime = now;
 
-    pressure = analogRead(FSR_PIN);
+    pressure = analogRead(SENSOR_PIN);
 
     // Send pressure to Python
     Serial.println(pressure);
@@ -52,23 +63,20 @@ void loop() {
     if (incoming == '\n') {
       commandBuffer.trim();
 
-      if (commandBuffer == "BUZZ" && !vibrationActive) {
-        vibrationActive = true;
-        motorOn = true;
-
-        digitalWrite(MOTOR_PIN, HIGH);
-        lastMotorToggle = now;
+      if (commandBuffer == "BUZZ" && pressure <= SENSOR_THRESHOLD) {
+        startVibration(now);
       }
 
       commandBuffer = "";
     }
-    else if (incoming != '\r') {
+    else if (incoming != '\r' && commandBuffer.length() < 32) {
       commandBuffer += incoming;
     }
   }
 
-  // 3. DETECT WHEN USER STANDS UP
-  if (pressure < PRESSURE_THRESHOLD) {
+  // 3. An inactive (dry) plate resets the activation timer.
+  if (pressure > SENSOR_THRESHOLD) {
+    sittingTiming = false; // The reminder counts uninterrupted sitting.
 
     if (!belowThresholdTiming) {
       belowThresholdTiming = true;
@@ -88,6 +96,14 @@ void loop() {
   } else {
     // User sat down again; reset break timer
     belowThresholdTiming = false;
+    if (!sittingTiming) {
+      sittingTiming = true;
+      sittingStart = now;
+    }
+    // The board can remind on its own; Python BUZZ remains supported.
+    if (now - sittingStart >= REMINDER_MS) {
+      startVibration(now);
+    }
   }
 
   // 4. REPEATING VIBRATION PATTERN

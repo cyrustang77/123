@@ -1,4 +1,58 @@
 /* SitSync — local fonts and a blue palette inspired by the team's reference. */
+.sensor-demo-notice {
+  position: relative;
+  z-index: 30;
+  background: #193f67;
+  color: white;
+  padding: 14px 24px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.comparison-card {
+  padding: 28px;
+  margin-top: 24px;
+}
+.comparison-card h2 {
+  font-size: 25px;
+}
+.comparison-card p {
+  line-height: 1.8;
+}
+.comparison-card a {
+  text-decoration: underline;
+}
+.session-line-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  stroke: none;
+}
+.session-line-chart text {
+  fill: #456585;
+  font-size: 11px;
+}
+.pastbi-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.pastbi-inputs label {
+  display: grid;
+  gap: 10px;
+  flex: 1 1 220px;
+}
+.pastbi-inputs input {
+  width: 100%;
+  border: 1px solid #bfd3e7;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f5f9ff;
+}
+#pastbiResult {
+  font-weight: 700;
+  color: #285d92;
+  font-size: 20px;
+}
 @font-face {
   font-family: 'Quicksand';
   src: url('fonts/quicksand-regular.ttf') format('truetype');

@@ -17,7 +17,7 @@ class IntegrationTests(TestCase):
         initial = server.state.copy()
         board = Mock(is_open=True)
         clock = [1000.0]
-        readings = iter([(1000, b"2300\n"), (1019, b"2400\n"), (1020, b"2500\n")])
+        readings = iter([(1000, b"1000\n"), (1029, b"1100\n"), (1030, b"1200\n")])
 
         def read():
             try:
@@ -25,6 +25,8 @@ class IntegrationTests(TestCase):
             except StopIteration:
                 raise KeyboardInterrupt  # Stop the otherwise infinite sensor thread.
             clock[0] = at
+            if at <= 1030:
+                board.write.assert_not_called()
             return value
 
         board.readline.side_effect = read
@@ -32,14 +34,14 @@ class IntegrationTests(TestCase):
             with patch.object(server, "SERIAL_PORT", "TEST"), \
                  patch.object(server.serial, "Serial", return_value=board), \
                  patch.object(server.time, "time", side_effect=lambda: clock[0]), \
-                 patch.dict(server.os.environ, {"SITSYNC_REMINDER_SECONDS": "20"}):
+                 patch.dict(server.os.environ, {"SITSYNC_REMINDER_SECONDS": "30"}):
                 with self.assertRaises(KeyboardInterrupt):
                     server.sensor_loop()
                 client = TestClient(server.app)  # No context: do not start a real sensor thread.
                 data = client.get("/data").json()
                 self.assertEqual(data["status"], "Sitting")
-                self.assertEqual(data["raw_adc"], 2500)
-                self.assertEqual(data["session_seconds"], 20)
+                self.assertEqual(data["raw_adc"], 1200)
+                self.assertEqual(data["session_seconds"], 30)
                 self.assertTrue(data["sensor_connected"])
                 board.write.assert_called_once_with(b"BUZZ\n")
                 client.post("/buzz")
@@ -48,6 +50,12 @@ class IntegrationTests(TestCase):
                 self.assertEqual(client.get("/connection.js").status_code, 200)
                 response = client.get("/data", headers={"Origin": "http://127.0.0.1:5500"})
                 self.assertEqual(response.headers["access-control-allow-origin"], "http://127.0.0.1:5500")
+                clock[0] = 1031
+                server.process_adc_reading(3800)
+                self.assertEqual(server.state['status'], 'Paused (Break)')
+                clock[0] = 1036
+                server.process_adc_reading(3800)
+                self.assertFalse(server.state['buzz_active'])
         finally:
             server.state.update(initial)
             server.serial_connection = None

@@ -16,12 +16,12 @@ import uvicorn
 
 # --- CONFIGURATION ---
 SERIAL_PORT = os.environ.get("SITSYNC_SERIAL_PORT", "").strip()  # Blank: discover USB board.
-REMINDER_SEC = 20  # Hackathon cue; set SITSYNC_REMINDER_SECONDS for another interval.
+REMINDER_SEC = 30  # Thirty seconds; keep firmware REMINDER_MS in sync.
 BAUD_RATE = 115200
-PRESSURE_THRESHOLD = 500       # Must match threshold in Arduino code
+PRESSURE_THRESHOLD = 2000      # Moisture-demo AO threshold; match Arduino SENSOR_THRESHOLD.
 INTERRUPTION_BUFFER_SEC = 10   # 10s grace period for brief breaks (600 for 10 mins)
 BASE_DIR = Path(__file__).resolve().parents[1]  # Project root, regardless of launch directory.
-JSON_FILE = BASE_DIR / "sessions.json"
+JSON_FILE = BASE_DIR / "moisture_sessions.json"  # Keep substitute-sensor runs out of sitting history.
 
 # --- LIVE STATE ---
 state = {
@@ -95,7 +95,8 @@ def process_adc_reading(adc_val):
                       "start_timestamp": None, "away_since": None, "continuous_start": None,
                       "paused_seconds": 0, "buzz_active": False})
 
-    if adc_val >= PRESSURE_THRESHOLD:
+    # AO is normally high when dry and falls with moisture. Calibrate on the actual module.
+    if adc_val <= PRESSURE_THRESHOLD:
         # User is sitting
         # Keep a short break in the session without counting it as seated time.
         if state["status"] == "Paused (Break)":
@@ -168,7 +169,7 @@ def sensor_loop():
                 serial_connection = None
 
             elapsed = (time.time() - demo_cycle_start) % 28
-            fake_adc = random.randint(2200, 2600) if elapsed < 15 else random.randint(0, 30)
+            fake_adc = random.randint(800, 1200) if elapsed < 15 else random.randint(3400, 3900)
             process_adc_reading(fake_adc)
             time.sleep(0.25)
 
@@ -183,7 +184,7 @@ def sensor_loop():
                     print(f"\n>>> Connected to ESP32 on {port} <<<\n")
 
                 line = ser.readline().decode("utf-8", errors="ignore").strip()
-                if line.isdigit():
+                if line.isdigit() and 0 <= int(line) <= 4095:
                     process_adc_reading(int(line))
 
             except Exception as e:
@@ -234,6 +235,9 @@ def get_live_data():
         "session_seconds": state["session_seconds"],
         "history": history[-5:],
         "session_history": history,
+        "sensor_kind": "moisture-demo",
+        "sensor_threshold": PRESSURE_THRESHOLD,
+        "sensor_active_low": True,
         "serial_port": connected_port,
         "serial_error": serial_error,
         "reminder_seconds": float(os.environ.get("SITSYNC_REMINDER_SECONDS", REMINDER_SEC)),

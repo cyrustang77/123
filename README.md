@@ -1,5 +1,15 @@
 # SitSync
 
+## Current replacement-sensor demo
+
+The original FSR has been replaced with an analog moisture sensor for testing. Connect module AO to GPIO 36, with common GND and 3.3 V supply compatible with the module. Never feed 5 V into an ESP32 ADC. Keep the board, motor wiring and USB dry; dampen only the sensing plate.
+
+The provisional detection threshold is **ADC ≤ 2000**, assuming dry readings are high and damp readings fall. Confirm both readings on the actual module before demonstrating; change `SENSOR_THRESHOLD` in the sketch and `PRESSURE_THRESHOLD` in Python together if necessary. Reverse detection in both if your module behaves oppositely. GPIO 36 alone does not confirm whether you connected AO or DO: this version expects AO.
+
+Upload `backend/onhacks2026/onhacks2026.ino`, close Serial Monitor, and run `.venv/bin/python backend/main.py`. Thirty seconds of continuous sensor activation starts the motor; five seconds of sensor inactivity stop it. A damp plate may remain active after a person leaves, so this substitute does not detect standing up or prove occupancy. The dashboard labels this as a demo. Logs go into ignored `moisture_sessions.json`, separately from original sitting records. Legacy API keys/status names remain for compatibility.
+
+The original sitting-cushion concept and research are described below. Those claims do not make the replacement sensor a sitting measurement device. Hardware calibration and a physical motor test are still required.
+
 A blue dashboard with locally stored Quicksand fonts for the team's single-FSR ESP32 cushion. The frontend reads Python's live data, while browser preview remains a separate, clearly labeled option.
 
 ## Project layout
@@ -47,6 +57,8 @@ Use My cushion to switch Python's demo/hardware mode after finishing the current
 
 ## Hardware and timing
 
+Firmware reminder update: upload the current `backend/onhacks2026/onhacks2026.ino` again. It now automatically starts the motor after 30 seconds continuously above 500 ADC, even without Python. It still accepts BUZZ and stops after five seconds away. The independent firmware interval is `REMINDER_MS`; change that too if you change Python's interval. Opening or pulling the source file does not flash it onto the ESP32.
+
 Upload `backend/onhacks2026/onhacks2026.ino` using the ESP32 board configuration appropriate to your board. The firmware logic is unchanged. Close Serial Monitor after uploading, then start Python.
 
 | Setting               | Value                                      |
@@ -63,7 +75,7 @@ Upload `backend/onhacks2026/onhacks2026.ino` using the ESP32 board configuration
 | Python session buffer | 10 seconds                                 |
 | Minimum saved session | 3 seconds                                  |
 
-Python automatically sends `BUZZ` after 20 seconds of continuous sitting, including when the webpage is closed. Set `SITSYNC_REMINDER_SECONDS=1800` for a 30-minute interval. The browser preference controls browser preview only; connected mode displays Python's interval. The selected interval is not a medically validated sitting limit. The Arduino firmware itself is unchanged.
+Python automatically sends `BUZZ` after 30 seconds of continuous sitting, including when the webpage is closed. Set `SITSYNC_REMINDER_SECONDS=1800` for a 30-minute interval. The browser preference controls browser preview only; connected mode displays Python's interval. The selected interval is not a medically validated sitting limit. The firmware also schedules its own reminder.
 
 A return before five seconds keeps an active motor pattern running. Five seconds away stops the motor pattern, while the same sitting session can remain open until ten seconds away. Return at or after ten seconds starts a new session. Time away is excluded from seated duration.
 
@@ -77,7 +89,7 @@ The backend reads raw integer ADC lines at 115200 baud. It provides:
 2. Fixing the session timer so resumed short breaks are not counted as sitting, and enforcing the ten-second deadline on return.
 3. Adding `POST /buzz` for the existing firmware command, plus current-session/freshness fields needed by the frontend.
 4. Automatic USB serial discovery and explicit connection errors.
-5. A 20-second reminder scheduled by Python, independent of the browser.
+5. A 30-second reminder scheduled by Python, independent of the browser.
 
 The existing `history` field still returns the latest five records. `session_history` exposes the complete log so the dashboard can calculate real history rather than inventing daily statistics.
 
@@ -115,7 +127,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-Tests use a simulated serial board and do not drive the motor. Physical verification: confirm LIVE SENSOR, sit until ADC reaches 500 and the timer starts, wait 20 seconds for vibration, then stand for 5 seconds to stop vibration and 10 seconds to save the session.
+Tests use a simulated serial board and do not drive the motor. Physical verification: confirm LIVE SENSOR, sit until ADC reaches 500 and the timer starts, wait 30 seconds for vibration, then stand for 5 seconds to stop vibration and 10 seconds to save the session.
 
 If port 8000 is already in use, stop the previous SitSync process before starting another. A COM3 error on macOS or a startup message saying SitWell indicates an older checkout. Run from this repository and install its requirements.
 

@@ -267,7 +267,7 @@
         : backendData?.demo_mode
           ? 'Simulated ADC from the Python server. No physical motor is driven.'
           : backendFresh()
-            ? 'One FSR input from Python. The hardware controls occupancy.'
+            ? 'Moisture-triggered sensor demo. This input does not measure sitting or pressure.'
             : backendData?.serial_error ||
               'Python is reachable, but no recent ESP32 reading is available.'
       : state.sampleDemo
@@ -576,7 +576,7 @@
       progress = Math.min(100, ((timestamp - session.awaySince) / GRACE_MS) * 100);
     } else {
       const interval = usingBackend()
-        ? (backendData.reminder_seconds || 20) * 1000
+        ? (backendData.reminder_seconds || 30) * 1000
         : state.settings.reminderMs;
       $('resetLabel').textContent =
         elapsed >= interval ? 'Your reminder is due' : 'Your next reminder preview';
@@ -642,7 +642,10 @@
         ? DEMO_AWAY_SIGNAL
         : DEMO_FSR_SIGNAL;
     const signalPercent = (signal / DEMO_SIGNAL_MAX) * 100;
-    const detected = signal >= PRESSURE_THRESHOLD;
+    const threshold = usingBackend()
+      ? (backendData?.sensor_threshold ?? PRESSURE_THRESHOLD)
+      : PRESSURE_THRESHOLD;
+    const detected = signal <= threshold;
     const status =
       usingBackend() && !backendFresh()
         ? 'No signal'
@@ -653,9 +656,17 @@
             : 'Sitting';
     const badge = $('occupancyBadge');
     badge.classList.toggle('away', away);
-    badge.innerHTML = '<i></i>' + status;
+    badge.innerHTML =
+      '<i></i>' +
+      (status === 'Sitting'
+        ? 'Sensor active'
+        : status === 'Standing'
+          ? 'Sensor inactive'
+          : status === 'Paused (Break)'
+            ? 'Inactive · buffer'
+            : status);
     $('cushionStage').classList.toggle('away', away);
-    $('occupancyCaption').textContent = away ? 'Seat released' : 'Pressure detected';
+    $('occupancyCaption').textContent = away ? 'Sensor inactive' : 'Moisture input active';
     $('seatDetection').textContent =
       usingBackend() && !backendFresh() ? 'Unknown' : detected ? 'Detected' : 'Not detected';
     $('fsrSignal').innerHTML =
@@ -668,24 +679,24 @@
       signal +
         ' ADC. ' +
         (usingBackend() ? 'Python sensor data. ' : 'Browser preview. ') +
-        'Sitting threshold: ' +
-        PRESSURE_THRESHOLD +
+        'Active at or below: ' +
+        threshold +
         ' ADC.',
     );
     $('fsrThresholdMarker').style.left = (PRESSURE_THRESHOLD / DEMO_SIGNAL_MAX) * 100 + '%';
     $('sensorList').innerHTML = `
   <div class="sensor-row">
    <div class="sensor-label">
-    <span>FSR 01 · raw ADC</span>
+    <span>Moisture demo · raw ADC</span>
     <b>${signal} ADC</b>
    </div>
    <div class="sensor-bar"><i style="width:${signalPercent}%"></i></div>
   </div>
   <dl>
-   <div><dt>Detection threshold</dt><dd>${PRESSURE_THRESHOLD} ADC</dd></div>
+   <div><dt>Active threshold</dt><dd>≤ ${threshold} ADC</dd></div>
    <div><dt>Reference status</dt><dd>${status}</dd></div>
-   <div><dt>Seat pressure detected</dt><dd>${detected ? 'Yes' : 'No'}</dd></div>
-   <div><dt>Measurement</dt><dd>Occupancy only</dd></div>
+   <div><dt>Sensor activated</dt><dd>${detected ? 'Yes' : 'No'}</dd></div>
+   <div><dt>Measurement</dt><dd>Moisture-triggered demonstration only</dd></div>
   </dl>
  `;
     document.querySelectorAll('[data-scenario]').forEach((button) => {
@@ -865,6 +876,37 @@
     renderSessions();
     renderConnection();
     $('weeklyChart').innerHTML = weekHTML();
+    renderSessionComparison();
+  }
+
+  function renderSessionComparison() {
+    const records = [...state.sessions].sort((a, b) => a.start - b.start).slice(-12);
+    const host = $('sessionComparison');
+    if (!records.length) {
+      host.textContent =
+        'Your completed sessions will appear here. Use Show sample data to preview.';
+      return;
+    }
+    const maximum = Math.max(1, ...records.map((session) => session.seatedMs / 60000));
+    const points = records.map((session, index) => ({
+      x: records.length === 1 ? 300 : 48 + (index * 504) / (records.length - 1),
+      y: 170 - (session.seatedMs / 60000 / maximum) * 140,
+      minutes: session.seatedMs / 60000,
+    }));
+    host.innerHTML = `<svg viewBox="0 0 600 210" role="img" aria-label="Sitting duration of the last ${records.length} completed sessions, oldest to newest" class="session-line-chart">
+      <path d="M48 20V170H560" stroke="#c4d8ec" fill="none"/>
+      <text x="4" y="30">${Math.ceil(maximum)}m</text><text x="12" y="175">0m</text>
+      <polyline points="${points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#4085c6" stroke-width="3"/>
+      ${points.map((p, index) => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="#285d92"><title>Session ${index + 1}: ${p.minutes.toFixed(1)} minutes</title></circle><text x="${p.x}" y="198" text-anchor="middle">${index + 1}</text>`).join('')}
+      </svg><p>${state.sampleDemo ? 'Sample data' : usingBackend() ? 'Python session records' : 'Browser-preview records'} · Oldest → newest · Longer sitting is not a higher health score.</p>
+      <div class="session-ranking">${[...records]
+        .sort((a, b) => a.seatedMs - b.seatedMs)
+        .slice(0, 5)
+        .map(
+          (session, index) =>
+            `<p><b>${index + 1}. ${escapeHTML(timeLabel(session.start))}</b> — ${(session.seatedMs / 60000).toFixed(1)} min seated <small>(${escapeHTML(dayKey(session.start))})</small></p>`,
+        )
+        .join('')}</div>`;
   }
   function route() {
     // Hash links keep this build usable directly from index.html without a server.
@@ -1236,6 +1278,25 @@
     }
   });
   $('dismissToast').onclick = () => $('toast').classList.remove('show');
+  function calculatePastbi() {
+    const activity = $('pastbiActivity').value;
+    const sitting = $('pastbiSitting').value;
+    const minutes = Number(activity),
+      hours = Number(sitting);
+    $('pastbiResult').textContent =
+      activity === '' || sitting === ''
+        ? 'Enter both daily totals to calculate your balance index.'
+        : !Number.isFinite(minutes) ||
+            !Number.isFinite(hours) ||
+            minutes < 0 ||
+            minutes > 1440 ||
+            hours <= 0 ||
+            hours > 24
+          ? 'Use 0–1440 activity minutes and sitting time greater than 0, up to 24 hours.'
+          : `PASTBI: ${(minutes / hours).toFixed(2)} (activity min/day ÷ sitting hours/day)`;
+  }
+  $('pastbiActivity').addEventListener('input', calculatePastbi);
+  $('pastbiSitting').addEventListener('input', calculatePastbi);
   window.addEventListener('hashchange', route);
   window.addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {

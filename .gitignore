@@ -7,6 +7,7 @@ node_modules/
 
 # Local sensor history and generated files are not shared with the team.
 sessions.json
+moisture_sessions.json
 backend/sessions.json
 *.pyc
 .pytest_cache/

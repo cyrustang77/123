@@ -4,7 +4,9 @@ window.SITSYNC_CONFIG = Object.freeze({
     fsrPin: 36,
     motorPin: 2,
     adcMax: 4095,
-    pressureThreshold: 500,
+    pressureThreshold: 2000,
+    activeLow: true,
+    sensorKind: 'moisture-demo',
     serialBaud: 115200,
     sampleIntervalMs: 250,
     command: 'BUZZ',
@@ -21,12 +23,12 @@ window.SITSYNC_CONFIG = Object.freeze({
 
   // Readings are inside the ranges used by the Python demo.
   demo: Object.freeze({
-    seatedAdc: 2400,
-    awayAdc: 12,
+    seatedAdc: 1000,
+    awayAdc: 3800,
   }),
   // Preview intervals only. Connected mode displays Python's reminder interval.
   preview: Object.freeze({
-    reminderMs: 20000,
+    reminderMs: 30000,
     everydayReminderMs: 1800000,
   }),
 });
