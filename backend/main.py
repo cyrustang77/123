@@ -8,13 +8,15 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 import serial
 import uvicorn
+from pathlib import Path
 
 # --- CONFIGURATION ---
 SERIAL_PORT = "COM3"           # Match your Windows COM port in Device Manager
 BAUD_RATE = 115200
 PRESSURE_THRESHOLD = 500       # Must match threshold in Arduino code
 INTERRUPTION_BUFFER_SEC = 10   # 10s grace period for brief breaks (600 for 10 mins)
-JSON_FILE = "sessions.json"
+BASE_DIR = Path(__file__).resolve().parent
+JSON_FILE = BASE_DIR / "sessions.json"
 REMINDER_INTERVAL_SEC = 30
 
 # --- LIVE STATE ---

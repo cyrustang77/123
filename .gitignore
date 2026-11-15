@@ -3,5 +3,5 @@ __pycache__/
 node_modules/
 .env
 .DS_Store
-sessions.json
+backend/sessions.json
 .venv/
