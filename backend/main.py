@@ -17,6 +17,7 @@ BAUD_RATE = 115200
 PRESSURE_THRESHOLD = 500       # Must match threshold in Arduino code
 INTERRUPTION_BUFFER_SEC = 10   # 10s grace period for brief breaks (600 for 10 mins)
 BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
 JSON_FILE = BASE_DIR / "sessions.json"
 REMINDER_INTERVAL_SEC = 30
 
