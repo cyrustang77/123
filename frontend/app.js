@@ -72,11 +72,7 @@
     // Sample history makes the first preview readable. It is labeled as sample
     // data in the interface and is never included in the backend-format JSON export.
     const end = now() - 60 * 60 * 1000;
-    const sampleSpecs = [
-      { minutes: 42, gap: 7, breaks: 1 },
-      { minutes: 38, gap: 13, breaks: 1 },
-      { minutes: 58, gap: 0, breaks: 2 },
-    ];
+    const sampleSpecs = [];
     let cursor = end - (42 + 7 + 38 + 13 + 58 + 4) * 60000;
     const samples = sampleSpecs.map((spec, i) => {
       const start = cursor;
@@ -129,6 +125,7 @@
       state = parsed;
   } catch {}
   if (!state) state = makeInitialState();
+  state.samples = [];
   if (
     ![CONFIG.hardware.reminderMs, CONFIG.hardware.everydayReminderMs].includes(
       state.settings.reminderMs,
