@@ -18,6 +18,35 @@
   const DEMO_AWAY_SIGNAL = CONFIG.demo.awayAdc;
   const DEMO_SIGNAL_MAX = CONFIG.hardware.adcMax;
 
+  let liveHardware = null;
+let previousHardwareScenario = null;
+
+async function pollHardware() {
+  try {
+    const response = await fetch('/data', { cache: 'no-store' });
+
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+
+    liveHardware = await response.json();
+
+    const hardwareScenario =
+      liveHardware.status === 'Sitting' ? 'seated' : 'away';
+
+    if (hardwareScenario !== previousHardwareScenario) {
+      previousHardwareScenario = hardwareScenario;
+      setScenario(hardwareScenario);
+    }
+
+    renderOccupancy();
+    updateTimer();
+  } catch (error) {
+    liveHardware = null;
+    console.warn('Waiting for hardware backend:', error.message);
+  }
+}
+
   // Time formatting is kept here so timers, tables, and downloads agree.
   const now = () => Date.now();
   const dayKey = (timestamp) => new Date(timestamp).toLocaleDateString('en-CA');
@@ -392,14 +421,28 @@
         : 0) + '<span> min</span>';
   }
   function renderOccupancy() {
-    // One FSR reports occupancy. It does not report where weight is distributed.
-    const session = state.active,
-      away = session.end !== null || session.awaySince !== null;
-    const scenario = away ? 'away' : 'seated';
-    const signal = away ? DEMO_AWAY_SIGNAL : DEMO_FSR_SIGNAL;
-    const signalPercent = (signal / DEMO_SIGNAL_MAX) * 100;
-    const detected = signal >= PRESSURE_THRESHOLD;
-    const status = session.end !== null ? 'Standing' : away ? 'Paused (Break)' : 'Sitting';
+  const session = state.active;
+  const usingHardware = liveHardware !== null;
+
+  const status = usingHardware
+    ? liveHardware.status
+    : session.end !== null
+      ? 'Standing'
+      : session.awaySince !== null
+        ? 'Paused (Break)'
+        : 'Sitting';
+
+  const away = status !== 'Sitting';
+  const scenario = away ? 'away' : 'seated';
+
+  const signal = usingHardware
+    ? Number(liveHardware.raw_adc) || 0
+    : away
+      ? DEMO_AWAY_SIGNAL
+      : DEMO_FSR_SIGNAL;
+
+  const signalPercent = (signal / DEMO_SIGNAL_MAX) * 100;
+  const detected = signal >= PRESSURE_THRESHOLD;
     const badge = $('occupancyBadge');
     badge.classList.toggle('away', away);
     badge.innerHTML = '<i></i>' + status;
@@ -418,7 +461,7 @@
     $('sensorList').innerHTML = `
   <div class="sensor-row">
    <div class="sensor-label">
-    <span>FSR 01 · simulated raw ADC</span>
+    <span>FSR 01 · ${usingHardware ? 'live raw ADC' : 'simulated raw ADC'}</span>
     <b>${signal} ADC</b>
    </div>
    <div class="sensor-bar"><i style="width:${signalPercent}%"></i></div>
@@ -916,6 +959,9 @@
   fillSettings();
   route();
   save();
+  pollHardware();
+  ßsetInterval(pollHardware, 500);
+
   setInterval(() => {
     const closedBefore = state.active.end;
     updateTimer();

@@ -5,7 +5,8 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 import serial
 import uvicorn
 from pathlib import Path
@@ -158,10 +159,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- API ENDPOINTS ---
-@app.get("/")
-def serve_dashboard():
-    return FileResponse("index.html")
 
 @app.get("/data")
 def get_live_data():
@@ -187,9 +184,18 @@ def set_mode(mode_name: str):
     elif mode_name.lower() == "live":
         state["demo_mode"] = False
         print("\n>>> Switched to LIVE HARDWARE MODE <<<\n")
+
     return {"demo_mode": state["demo_mode"]}
 
-# --- KEEP RUNNING INFINITELY WHEN CLICKING "RUN" IN VS CODE ---
+
+# Serve the frontend after defining all API routes.
+app.mount(
+    "/",
+    StaticFiles(directory=str(FRONTEND_DIR), html=True),
+    name="frontend",
+)
+
+
 if __name__ == "__main__":
-    print("Starting Sitting Strava server... Press Ctrl+C in terminal to stop.")
+    print("Starting SitWell server... Press Ctrl+C to stop.")
     uvicorn.run(app, host="127.0.0.1", port=8000)
