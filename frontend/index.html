@@ -8,17 +8,17 @@
     />
     <meta
       name="theme-color"
-      content="#f5f5ef"
+      content="#4085c6"
     />
     <meta
       name="description"
-      content="SitWell turns everyday sitting into a more mindful rhythm. A private, local smart cushion companion."
+      content="SitSync turns everyday sitting into a more mindful rhythm. A private, local smart cushion companion."
     />
-    <title>SitWell — Find your rhythm.</title>
-    <!-- Browser tab icon (a small green SVG, stored inline so no extra file is needed) -->
+    <title>SitSync — Find your rhythm.</title>
+    <!-- Inline blue brand mark; no external image request. -->
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%231d4b3d'/%3E%3Cpath d='M10 24q10 10 20-10M10 16h0' fill='none' stroke='%23d1ec95' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%234085c6'/%3E%3Cpath d='M10 24q10 10 20-10M10 16h0' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
     />
     <!-- All the styling (colors, layout, fonts) lives in styles.css -->
     <link
@@ -28,6 +28,10 @@
     <!-- All the behavior (buttons, timer, charts, saving settings) lives in app.js. "defer" = run it after the page has loaded -->
     <script
       src="config.js"
+      defer
+    ></script>
+    <script
+      src="connection.js"
       defer
     ></script>
     <script
@@ -222,14 +226,14 @@
      SIDEBAR (the left-hand column that stays on screen)
      ============================================================ -->
     <aside class="sidebar">
-      <!-- Logo: the "sitwell." name with a small icon. Clicking it goes back to the Overview page -->
+      <!-- Logo: the "sitsync." name with a small icon. Clicking it goes back to the Overview page -->
       <a
         href="#overview"
         class="brand"
-        aria-label="SitWell overview"
+        aria-label="SitSync overview"
         ><span class="brand-mark"
           ><svg viewBox="0 0 32 32"><path d="M7 19q9 9 18-9M8 10h.01" /></svg></span
-        ><span>sitwell<span class="brand-period">.</span></span></a
+        ><span>SitSync</span></a
       >
       <div class="workspace-label">YOUR SPACE</div>
       <!-- Menu links. data-view tells app.js which page to show; "active" marks the page currently open -->
@@ -278,8 +282,8 @@
           <div class="leaf-illustration">
             <svg><use href="#i-leaf" /></svg>
           </div>
-          <h3>A little movement.<br />A better day.</h3>
-          <p>Make room for a moment<br />away from your desk.</p>
+          <h3>One sensor.<br />A clearer routine.</h3>
+          <p>Track sitting time.<br />Make room for movement.</p>
           <button
             class="text-button"
             data-action="routine"
@@ -349,7 +353,7 @@
                 YOUR DAILY CHECK-IN
               </div>
               <h1 id="overview-heading">Find your rhythm<span>.</span></h1>
-              <p>A little awareness goes a long way. Let’s make today feel good.</p>
+              <p>Your sitting time, sensor signal, and saved sessions in one place.</p>
             </div>
             <button
               class="button button-white"
@@ -359,12 +363,32 @@
             </button>
           </div>
           <!-- Banner explaining this is a demo that runs without the real hardware -->
-          <div class="demo-banner">
-            <span class="demo-tag"><span></span> INTERACTIVE DEMO</span
-            ><span>Try your cushion before connecting the hardware.</span
-            ><button data-action="device">
-              Explore the device <svg><use href="#i-arrow" /></svg>
-            </button>
+          <div class="source-panel">
+            <div class="source-copy">
+              <span class="demo-tag"><span></span><b id="sourceLabel">BROWSER PREVIEW</b></span>
+              <p id="sourceDescription">Connect to Python to show real session data.</p>
+            </div>
+            <div class="source-actions">
+              <button
+                class="button button-blue"
+                data-action="connect-live"
+                id="liveConnectButton"
+              >
+                Connect Python
+              </button>
+              <button
+                class="button button-white"
+                data-action="browser-preview"
+              >
+                Browser preview
+              </button>
+              <button
+                class="button button-white"
+                data-action="sample-statistics"
+              >
+                Sample statistics
+              </button>
+            </div>
           </div>
           <!-- Top row: the cushion picture (left) and the current session timer (right) -->
           <div class="hero-grid">
@@ -391,7 +415,7 @@
                 <div class="stage-grid"></div>
                 <div class="stage-orbit orbit-one"></div>
                 <div class="stage-orbit orbit-two"></div>
-                <span class="stage-caption top-caption">SITWELL CUSHION <span>01</span></span>
+                <span class="stage-caption top-caption">SITSYNC CUSHION <span>01</span></span>
                 <!-- The cushion drawing. Everything between <svg ...> and </svg> is a picture, not page text -->
                 <svg
                   class="cushion-art"
@@ -408,14 +432,14 @@
                       x2=".8"
                       y2="1"
                     >
-                      <stop stop-color="#63927d" />
+                      <stop stop-color="#607a95" />
                       <stop
                         offset=".55"
-                        stop-color="#35634f"
+                        stop-color="#354c63"
                       />
                       <stop
                         offset="1"
-                        stop-color="#214737"
+                        stop-color="#213447"
                       />
                     </linearGradient>
                     <linearGradient
@@ -425,30 +449,30 @@
                       x2="0"
                       y2="1"
                     >
-                      <stop stop-color="#325b46" />
+                      <stop stop-color="#32475b" />
                       <stop
                         offset="1"
-                        stop-color="#122e23"
+                        stop-color="#12202e"
                       />
                     </linearGradient>
                     <radialGradient id="pressureGlow">
                       <stop
-                        stop-color="#f2ffd1"
+                        stop-color="#dbe8f5"
                         stop-opacity=".95"
                       />
                       <stop
                         offset=".3"
-                        stop-color="#d1ee92"
+                        stop-color="#9dc0e3"
                         stop-opacity=".8"
                       />
                       <stop
                         offset=".68"
-                        stop-color="#b6d97a"
+                        stop-color="#7aaad9"
                         stop-opacity=".3"
                       />
                       <stop
                         offset="1"
-                        stop-color="#b6d97a"
+                        stop-color="#7aaad9"
                         stop-opacity="0"
                       />
                     </radialGradient>
@@ -470,7 +494,7 @@
                     >
                       <path
                         d="M0 0 5 5M0 5 5 0"
-                        stroke="#d4e7cc"
+                        stroke="#ccdae7"
                         stroke-width=".3"
                         opacity=".13"
                       />
@@ -487,7 +511,7 @@
                     cy="262"
                     rx="201"
                     ry="25"
-                    fill="#183427"
+                    fill="#182634"
                     opacity=".22"
                     filter="url(#matShadow)"
                   />
@@ -500,7 +524,7 @@
                   <path
                     d="M90 140Q73 126 100 113L286 32Q304 24 330 34L527 119Q551 131 530 146L334 253Q314 264 291 252Z"
                     fill="url(#matTop)"
-                    stroke="#80a387"
+                    stroke="#7992aa"
                     stroke-width="1"
                   />
                   <!-- One conceptual FSR glow, not a spatial pressure map. -->
@@ -524,26 +548,26 @@
                     <path
                       d="m115 126 180-78q12-5 24 0l188 81q10 5 0 11L326 237q-12 6-23 0l-188-98q-12-6 0-13Z"
                       fill="none"
-                      stroke="#b0c5a4"
+                      stroke="#a4b5c5"
                       stroke-opacity=".4"
                       stroke-width="1"
                       stroke-dasharray="2 4"
                     />
                   </g>
 
-                  <!-- Small "sitwell." logo tag on the front edge -->
+                  <!-- Small "sitsync." logo tag on the front edge -->
                   <path
                     d="m289 259 44 0-4 13-37-1Z"
-                    fill="#d1e1c3"
+                    fill="#c3d2e1"
                   />
                   <text
                     x="297"
                     y="268"
                     font-size="6"
-                    fill="#244735"
+                    fill="#243647"
                     font-family="monospace"
                   >
-                    sitwell.
+                    SitSync
                   </text>
                   <!-- One conceptual input; the actual placement depends on the assembly. -->
                   <g class="fsr-marker">
@@ -552,7 +576,7 @@
                       cy="142"
                       r="15"
                       fill="none"
-                      stroke="#e4f5c8"
+                      stroke="#ccdff1"
                       stroke-width="1"
                       opacity=".7"
                     />
@@ -560,20 +584,20 @@
                       cx="311"
                       cy="142"
                       r="4"
-                      fill="#e4f5c8"
+                      fill="#ccdff1"
                     />
                   </g>
                   <path
                     d="M311 142 220 88H135"
                     fill="none"
-                    stroke="#88a48b"
+                    stroke="#7f96ad"
                     stroke-width="1"
                   />
                   <text
                     x="100"
                     y="78"
                     font-size="10"
-                    fill="#5c7562"
+                    fill="#52697f"
                     font-family="monospace"
                   >
                     FSR 01
@@ -585,7 +609,8 @@
                   ><svg><use href="#i-check" /></svg>
                 </div>
                 <div class="stage-bottom">
-                  <span><i></i> Simulated sensor signal</span><span>1 FSR · OCCUPANCY</span>
+                  <span><i></i> <span id="signalSourceCaption">Browser-preview signal</span></span
+                  ><span>1 FSR · OCCUPANCY</span>
                 </div>
               </div>
               <!-- Single raw ADC input with a threshold marker. This is not a weight measurement. -->
@@ -596,7 +621,10 @@
                     ><strong id="seatDetection">Detected</strong>
                   </div>
                   <div class="fsr-signal-value">
-                    <span class="readout-label">SIMULATED RAW SIGNAL</span
+                    <span
+                      class="readout-label"
+                      id="rawSignalLabel"
+                      >RAW SENSOR SIGNAL</span
                     ><strong id="fsrSignal">2400<span> ADC</span></strong>
                   </div>
                 </div>
@@ -621,7 +649,10 @@
                 </div>
               </div>
               <!-- Manual demo controls. They simulate occupancy without changing real hardware. -->
-              <div class="demo-controls occupancy-controls">
+              <div
+                class="demo-controls occupancy-controls"
+                id="previewControls"
+              >
                 <span>TRY IT OUT</span
                 ><button
                   class="selected"
@@ -681,7 +712,7 @@
               </p>
               <!-- Button to record a movement break now -->
               <button
-                class="button button-lime"
+                class="button button-sky"
                 data-action="break"
                 id="breakButton"
               >
@@ -695,7 +726,10 @@
           <!-- Heading for the daily statistics, with a small "DEMO DAY / TODAY" label on the right -->
           <div class="section-heading">
             <h2>Your day, one moment at a time.</h2>
-            <span>DEMO DAY <i></i> <span id="dayLabel">TODAY</span></span>
+            <span
+              ><span id="todaySourceLabel">PREVIEW DATA</span> <i></i>
+              <span id="dayLabel">TODAY</span></span
+            >
           </div>
           <!-- Four summary cards: time seated, movement breaks, average sitting stretch, and a progress message -->
           <div class="stats-grid">
@@ -704,22 +738,15 @@
               <div class="stat-label">
                 Time seated <svg><use href="#i-clock" /></svg>
               </div>
-              <strong id="totalSeated">2h 18m</strong>
-              <p>Across <span id="sessionCount">3</span> sessions today</p>
-              <div
-                class="mini-bars"
-                aria-hidden="true"
-              >
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
-                ><i></i><i></i>
-              </div>
+              <strong id="totalSeated">0m</strong>
+              <p>Across <span id="sessionCount">0</span> sessions today</p>
             </article>
             <!-- Card 2: breaks taken versus the daily goal, with a row of dots (filled in by app.js) -->
             <article class="stat-card">
               <div class="stat-label">
-                Movement breaks <svg><use href="#i-walk" /></svg>
+                <span id="secondStatLabel">Movement breaks</span> <svg><use href="#i-walk" /></svg>
               </div>
-              <strong id="movementCount">4<span> / 6</span></strong>
+              <strong id="movementCount">0<span> / 6</span></strong>
               <p id="movementHint">Two more moments for yourself</p>
               <div
                 class="break-dots"
@@ -730,37 +757,26 @@
             <!-- Card 3: average time spent sitting between breaks, with a small line graph -->
             <article class="stat-card">
               <div class="stat-label">
-                Average sitting stretch <svg><use href="#i-chart" /></svg>
+                <span id="averageStatLabel">Average sitting stretch</span>
+                <svg><use href="#i-chart" /></svg>
               </div>
-              <strong id="averageStretch">34<span> min</span></strong>
+              <strong id="averageStretch">0<span> min</span></strong>
               <p>A pause between periods of focus</p>
-              <svg
-                class="mini-line"
-                viewBox="0 0 200 25"
-                aria-hidden="true"
-              >
-                <path
-                  d="M0 21 20 15 40 18 60 6 80 11 100 7 120 13 140 6 160 10 180 4 200 7"
-                  fill="none"
-                  stroke="#6d8c65"
-                  stroke-width="2"
-                />
-              </svg>
             </article>
             <!-- Card 4: encouraging message about today's breaks -->
             <article class="stat-card goal-card">
               <div class="stat-label">
-                A moment of progress <svg><use href="#i-leaf" /></svg>
+                <span id="sourceHealthLabel">Data source</span> <svg><use href="#i-plug" /></svg>
               </div>
-              <strong>Little wins.</strong>
-              <p id="winText">You made room for 4 breaks today.</p>
+              <strong id="sourceHealth">Preview</strong>
+              <p id="winText">No fabricated history.</p>
               <span class="goal-badge"
                 ><svg><use href="#i-check" /></svg> Every reset counts</span
               >
             </article>
           </div>
 
-          <!-- Bottom row: the daily rhythm chart (left) and a "take a break" card with a plant drawing (right) -->
+          <!-- Daily activity timeline and a guided movement-break card -->
           <div class="bottom-grid">
             <!-- Chart card. The Today/Week buttons (data-chart) switch the chart; app.js draws the chart into #rhythmChart -->
             <article class="card rhythm-card">
@@ -786,18 +802,23 @@
                 class="rhythm-chart"
               ></div>
               <div class="chart-legend">
-                <span><i class="seated-key"></i> Seated</span
-                ><span><i class="break-key"></i> Movement break</span
-                ><span><i class="away-key"></i> Away</span
-                ><span class="sample-note">Sample history + your demo session</span>
+                <span><i class="seated-key"></i> <span id="timelineSeatedLabel">Seated</span></span
+                ><span id="timelineBreakLegend"><i class="break-key"></i> Movement break</span
+                ><span><i class="away-key"></i> <span id="timelineAwayLabel">Away</span></span
+                ><span class="sample-note"
+                  ><span id="historySourceLabel">Your browser-preview sessions</span></span
+                >
               </div>
             </article>
-            <!-- Reminder card with a button that opens the 60-second reset, and a plant drawing -->
+            <!-- Open the guided 60-second movement break -->
             <article class="reset-card">
               <div class="reset-copy">
                 <span class="eyebrow">MAKE A LITTLE SPACE</span>
-                <h2>Your next great idea<br />might start with a break.</h2>
-                <p>Step away. Roll your shoulders.<br />Come back with a fresh perspective.</p>
+                <h2>Take a movement break.</h2>
+                <p>
+                  Stand or move in a way that works for you. Your seat sensor tracks occupancy, not
+                  exercise intensity.
+                </p>
                 <button
                   class="text-button"
                   data-action="routine"
@@ -805,30 +826,6 @@
                   Try a 60-second reset <svg><use href="#i-arrow" /></svg>
                 </button>
               </div>
-              <svg
-                class="plant-art"
-                viewBox="0 0 130 210"
-                aria-hidden="true"
-              >
-                <path
-                  d="M67 190Q38 118 74 32"
-                  stroke="#567653"
-                  stroke-width="3"
-                  fill="none"
-                />
-                <path
-                  d="M66 151Q5 157 18 100q48 2 48 51ZM63 115q58 1 48-56-49 5-48 56ZM66 73Q26 68 40 25q39 9 26 48ZM73 44Q110 25 91 0 66 15 73 44Z"
-                  fill="#76946c"
-                />
-                <path
-                  d="M46 174h45l-9 36H54Z"
-                  fill="#c0cda3"
-                />
-                <path
-                  d="M16 208h98"
-                  stroke="#b3c09c"
-                />
-              </svg>
             </article>
           </div>
           <aside class="learn-teaser">
@@ -850,7 +847,7 @@
           <footer class="page-footer">
             <span
               ><svg><use href="#i-leaf" /></svg> Built for your body. Designed for your day.</span
-            ><span>sitwell. <span class="footer-dot">·</span> A little better, every day.</span>
+            ><span>SitSync <span class="footer-dot">·</span> A little better, every day.</span>
           </footer>
         </section>
 
@@ -872,12 +869,24 @@
             </div>
             <div class="page-actions">
               <button
+                class="button button-blue"
+                data-action="sample-statistics"
+              >
+                Show sample data
+              </button>
+              <button
+                class="button button-white"
+                data-action="connect-live"
+              >
+                Use live data
+              </button>
+              <button
                 class="button button-white"
                 data-action="export"
               >
                 <svg><use href="#i-download" /></svg> Export CSV</button
               ><button
-                class="button button-green"
+                class="button button-blue"
                 data-action="export-json"
               >
                 <svg><use href="#i-download" /></svg> Export JSON
@@ -955,22 +964,35 @@
           aria-labelledby="insights-heading"
           hidden
         >
-          <!-- Page title and a "SAMPLE WEEK" label -->
+          <!-- Page title and a "RECORDED SESSIONS" label -->
           <div class="page-heading">
             <div>
               <div class="eyebrow">SMALL HABITS. REAL AWARENESS.</div>
               <h1 id="insights-heading">See the bigger picture<span>.</span></h1>
               <p>Find patterns in your day and make a little more room for movement.</p>
             </div>
-            <span class="outline-pill">SAMPLE WEEK</span>
+            <div class="page-actions">
+              <button
+                class="button button-blue"
+                data-action="sample-statistics"
+              >
+                Show sample data
+              </button>
+              <button
+                class="button button-white"
+                data-action="connect-live"
+              >
+                Use live data
+              </button>
+            </div>
           </div>
           <!-- Left: weekly chart (app.js draws it into #weeklyChart). Right: a tip card with a button that opens the reset -->
           <div class="insight-grid">
             <article class="card weekly-card">
               <div class="card-heading">
                 <div>
-                  <span class="eyebrow">MOVEMENT THROUGH THE WEEK</span>
-                  <h2>Every break is a small win.</h2>
+                  <span class="eyebrow">YOUR LAST SEVEN DAYS</span>
+                  <h2>Your saved sessions.</h2>
                 </div>
                 <span class="outline-pill">7 DAYS</span>
               </div>
@@ -978,8 +1000,12 @@
                 id="weeklyChart"
                 class="weekly-chart"
               ></div>
-              <p class="muted">
-                Illustrative history. Your demo activity appears in today’s overview.
+              <p
+                class="muted"
+                id="weeklyDataCaption"
+              >
+                No saved sessions yet? Choose Show sample data to preview a populated week, or use
+                live data to track your cushion.
               </p>
             </article>
             <article class="insight-feature">
@@ -1019,8 +1045,8 @@
               <svg><use href="#i-shield" /></svg>
               <h3>Your habits stay yours.</h3>
               <p>
-                This demo saves settings and activity in this browser. You can export your session
-                history whenever you like.
+                Settings stay in this browser. Connected sessions come from Python and its local
+                JSON log. Export your session history whenever you like.
               </p>
             </article>
           </div>
@@ -1034,7 +1060,7 @@
         >
           <div class="page-heading">
             <div>
-              <div class="eyebrow">THE SITWELL FIELD GUIDE / VOL. 01</div>
+              <div class="eyebrow">THE SITSYNC FIELD GUIDE / VOL. 01</div>
               <h1 id="learn-heading">Good to know. Better to feel<span>.</span></h1>
               <p>The science, the tradeoffs, and the little things that make a difference.</p>
             </div>
@@ -1242,7 +1268,7 @@
               <details>
                 <summary>Is 10 seconds a medical recommendation?<span>+</span></summary>
                 <p>
-                  No. It’s SitWell’s session-grouping rule. Your reminder interval is a separate
+                  No. It’s SitSync’s session-grouping rule. Your reminder interval is a separate
                   preference. Neither setting establishes how long it is medically safe for you to
                   sit.
                 </p>
@@ -1304,7 +1330,7 @@
               <h1 id="device-heading">A smarter place to sit<span>.</span></h1>
               <p>Understand your cushion. Tune it to your day.</p>
             </div>
-            <span class="demo-tag"><span></span> DEMO DEVICE</span>
+            <span class="demo-tag"><span></span> DEVICE CONTROLS</span>
           </div>
           <!-- Two columns. Left: device summary (data source, connection status, grace period, storage) plus a note for the hardware team. Right: simulated sensor readings (app.js fills #sensorList) and a "Test reminder" button -->
           <div class="device-grid">
@@ -1312,112 +1338,110 @@
               <div class="device-icon">
                 <svg><use href="#i-mat" /></svg>
               </div>
-              <span class="eyebrow">SITWELL / CUSHION 01</span>
-              <h2>One sensor. Less guesswork.</h2>
+              <span class="eyebrow">ONE FSR / ESP32</span>
+              <h2>Your cushion connection.</h2>
               <p>
-                One force-sensitive resistor detects seat pressure. Session timing and reminders use
-                that occupied-or-away signal.
+                One pressure signal estimates whether the seat is occupied. No posture grading or
+                side-to-side measurements.
               </p>
               <dl>
                 <div>
-                  <dt>FSR input</dt>
-                  <dd>GPIO 36 · ADC1</dd>
-                </div>
-                <div>
-                  <dt>Motor output</dt>
-                  <dd>GPIO 2</dd>
-                </div>
-                <div>
                   <dt>Data source</dt>
-                  <dd>Manual browser demo</dd>
+                  <dd id="dataSourceValue">Browser preview</dd>
                 </div>
                 <div>
-                  <dt>Hardware connection</dt>
-                  <dd>Not connected</dd>
+                  <dt>Hardware signal</dt>
+                  <dd id="hardwareConnectionValue">Not connected</dd>
                 </div>
                 <div>
-                  <dt>Sitting threshold</dt>
-                  <dd>500 ADC</dd>
+                  <dt>FSR / motor pins</dt>
+                  <dd>GPIO 36 / GPIO 2</dd>
                 </div>
                 <div>
-                  <dt>ADC range</dt>
-                  <dd>0–4095</dd>
+                  <dt>Threshold / range</dt>
+                  <dd>500 / 0–4095 ADC</dd>
                 </div>
                 <div>
-                  <dt>Serial baud rate</dt>
-                  <dd>115200</dd>
+                  <dt>Serial / sample rate</dt>
+                  <dd>115200 baud / 250 ms</dd>
                 </div>
                 <div>
-                  <dt>Nominal sampling</dt>
-                  <dd>250 ms · 4 per second</dd>
+                  <dt>Motor activation</dt>
+                  <dd>BUZZ command</dd>
                 </div>
                 <div>
-                  <dt>Firmware reminder</dt>
-                  <dd>20 seconds · once per sit</dd>
+                  <dt>Motor pattern</dt>
+                  <dd>500 ms on / 500 ms off</dd>
                 </div>
                 <div>
-                  <dt>Motor pulse</dt>
-                  <dd>800 ms · 0.8 seconds</dd>
+                  <dt>Stop pattern</dt>
+                  <dd>5 continuous seconds away</dd>
                 </div>
                 <div>
-                  <dt>Python session buffer</dt>
+                  <dt>Session buffer</dt>
                   <dd>10 seconds</dd>
                 </div>
                 <div>
-                  <dt>Minimum saved session</dt>
+                  <dt>Minimum logged session</dt>
                   <dd>3 seconds</dd>
                 </div>
-                <div>
-                  <dt>Storage</dt>
-                  <dd>This browser only</dd>
-                </div>
               </dl>
-              <div class="info-banner">
-                <svg><use href="#i-plug" /></svg>
-                <p>
-                  These are the supplied Arduino/Python settings. The ESP32 controls the physical
-                  motor; this page only previews it. Hardware is not connected.
-                </p>
+              <div class="device-mode-actions">
+                <button
+                  class="button button-white"
+                  data-action="python-demo"
+                >
+                  Python demo mode
+                </button>
+                <button
+                  class="button button-white"
+                  data-action="python-live"
+                >
+                  ESP32 hardware mode
+                </button>
               </div>
+              <p class="muted">
+                Mode changes require a finished session. Python demo mode simulates ADC and never
+                drives a physical motor.
+              </p>
             </article>
             <div>
               <article class="card sensors-card">
                 <div class="card-heading">
                   <div>
-                    <span class="eyebrow">DEMO TELEMETRY</span>
-                    <h2>One input, clearly shown.</h2>
+                    <span class="eyebrow">SINGLE SENSOR INPUT</span>
+                    <h2>Pressure, clearly shown.</h2>
                   </div>
-                  <span class="outline-pill">SIMULATED</span>
                 </div>
                 <div id="sensorList"></div>
                 <p class="muted">
-                  Simulated sitting: 2400 ADC; away: 12 ADC. Values follow the Python demo ranges.
-                  ADC is a signal, not kilograms.
+                  ADC is a sensor signal, not body weight. A connection without recent readings is
+                  shown as unavailable.
                 </p>
               </article>
               <article class="card haptic-card">
                 <div>
-                  <h3>A gentle nudge.</h3>
-                  <p>One 800 ms preview pulse.</p>
-                  <p>Motor preview: <strong id="motorPreviewStatus">Off</strong></p>
+                  <h3>Movement reminder.</h3>
+                  <p>500 ms on / 500 ms off.</p>
+                  <p>Command state: <strong id="motorPreviewStatus">Off</strong></p>
                 </div>
                 <button
-                  class="button button-green"
+                  class="button button-blue"
                   data-action="haptic"
                 >
-                  Test reminder
+                  Send reminder
                 </button>
               </article>
               <article class="card hardware-timing-note">
-                <span class="eyebrow">TWO TIMERS, TWO JOBS</span>
-                <h3>A reminder is not a session.</h3>
+                <span class="eyebrow">TWO SEPARATE RULES</span>
+                <h3>5 seconds to stop. 10 seconds to close.</h3>
                 <p>
-                  Arduino restarts its 20-second reminder after every stand-up. Python may still
-                  keep the same session open during its separate 10-second buffer.
+                  The firmware stops an active vibration pattern after five continuous seconds below
+                  threshold. Python keeps a session open for ten seconds before saving it.
                 </p>
                 <p>
-                  The supplied Arduino uses a blocking delay for its 800 ms buzz, so serial readings
-                  pause during the pulse. The 250 ms sampling interval is nominal.
+                  Motor status is inferred from commands; this firmware does not send motor
+                  feedback. The browser animation illustrates the pattern.
                 </p>
               </article>
             </div>
@@ -1465,8 +1489,9 @@
             </div>
             <div class="setting-row">
               <label for="intervalInput"
-                >Reminder preview preset<small
-                  >Only changes this page. Arduino still uses its own REMINDER_MS setting.</small
+                >Movement reminder interval<small
+                  >Browser-preview interval. For hardware, Python schedules the cue automatically
+                  (20 seconds by default), even when this page is closed.</small
                 ></label
               ><select
                 id="intervalInput"
@@ -1493,8 +1518,9 @@
             </div>
             <div class="setting-row">
               <label for="reminderInput"
-                >On-screen reminders<small
-                  >Shows this page’s alerts. It does not change the physical motor.</small
+                >Movement reminders<small
+                  >When connected, a due cue sends BUZZ to the ESP32. In preview, only the animation
+                  runs.</small
                 ></label
               ><input
                 id="reminderInput"
@@ -1516,7 +1542,7 @@
                 ><svg><use href="#i-shield" /></svg> Saved only in this browser.</span
               ><button
                 type="submit"
-                class="button button-green"
+                class="button button-blue"
               >
                 Save preferences <svg><use href="#i-check" /></svg>
               </button>

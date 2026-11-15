@@ -1,51 +1,22 @@
 /**
- * SitWell dashboard controller.
+ * SitSync dashboard controller.
  *
- * This file manages the manual browser demo, sitting sessions, navigation,
- * downloads, and small popups. The backend and motor are not connected here.
+ * This file renders Python sensor data or an explicitly selected browser preview.
+ * connection.js owns HTTP requests; browser-preview history stays separate.
  * Hardware settings live in config.js; educational content lives in learn.js.
  */
 (() => {
   'use strict';
   // Shared settings come from the Arduino/Python reference, loaded before this file.
-  const CONFIG = window.SITWELL_CONFIG;
+  const CONFIG = window.SITSYNC_CONFIG;
   const $ = (id) => document.getElementById(id);
-  const STORAGE_KEY = 'sitwell.demo.v1';
+  const STORAGE_KEY = 'sitsync.demo.v1';
   const GRACE_MS = CONFIG.session.interruptionBufferMs;
   const PRESSURE_THRESHOLD = CONFIG.hardware.pressureThreshold;
   const MIN_SESSION_MS = CONFIG.session.minimumSavedMs;
   const DEMO_FSR_SIGNAL = CONFIG.demo.seatedAdc;
   const DEMO_AWAY_SIGNAL = CONFIG.demo.awayAdc;
   const DEMO_SIGNAL_MAX = CONFIG.hardware.adcMax;
-
-  let liveHardware = null;
-let previousHardwareScenario = null;
-
-async function pollHardware() {
-  try {
-    const response = await fetch('/data', { cache: 'no-store' });
-
-    if (!response.ok) {
-      throw new Error(`Backend returned ${response.status}`);
-    }
-
-    liveHardware = await response.json();
-
-    const hardwareScenario =
-      liveHardware.status === 'Sitting' ? 'seated' : 'away';
-
-    if (hardwareScenario !== previousHardwareScenario) {
-      previousHardwareScenario = hardwareScenario;
-      setScenario(hardwareScenario);
-    }
-
-    renderOccupancy();
-    updateTimer();
-  } catch (error) {
-    liveHardware = null;
-    console.warn('Waiting for hardware backend:', error.message);
-  }
-}
 
   // Time formatting is kept here so timers, tables, and downloads agree.
   const now = () => Date.now();
@@ -82,7 +53,7 @@ async function pollHardware() {
     const seconds = Math.floor(Math.max(0, ms) / 1000);
     return seconds < 60 ? seconds + 's' : shortDuration(ms);
   };
-  // Session records and clearly labeled sample history.
+  // Browser-preview sessions stay separate from records received from Python.
   const makeSession = (timestamp) => ({
     id: 'session-' + timestamp,
     start: timestamp,
@@ -98,44 +69,19 @@ async function pollHardware() {
     sample: false,
   });
   function makeInitialState() {
-    // Sample history makes the first preview readable. It is labeled as sample
-    // data in the interface and is never included in the backend-format JSON export.
-    const end = now() - 60 * 60 * 1000;
-    const sampleSpecs = [];
-    let cursor = end - (42 + 7 + 38 + 13 + 58 + 4) * 60000;
-    const samples = sampleSpecs.map((spec, i) => {
-      const start = cursor;
-      const finish = start + (spec.minutes + spec.breaks) * 60000;
-      cursor = finish + spec.gap * 60000;
-      const breaks = Array.from({ length: spec.breaks }, (_, n) => ({
-        start: start + ((n + 1) * 10 + n) * 60000,
-        end: start + ((n + 1) * 10 + n + 1) * 60000,
-      }));
-      const intervals = [];
-      let segmentStart = start;
-      breaks.forEach((b) => {
-        intervals.push({ start: segmentStart, end: b.start });
-        segmentStart = b.end;
-      });
-      intervals.push({ start: segmentStart, end: finish });
-      return {
-        id: 'sample-' + i,
-        start,
-        end: finish,
-        seatedMs: spec.minutes * 60000,
-        seatedSince: null,
-        awaySince: null,
-        intervals,
-        breaks,
-        sample: true,
-      };
-    });
+    // No invented history or automatic sitting session on a fresh visit.
     return {
       version: 1,
-      settings: { name: '', reminderMs: CONFIG.hardware.reminderMs, goal: 6, reminders: true },
-      samples,
+      settings: { name: '', reminderMs: CONFIG.preview.reminderMs, goal: 6, reminders: true },
+      samples: [],
       sessions: [],
-      active: makeSession(now()),
+      active: {
+        ...makeSession(now()),
+        end: now(),
+        seatedSince: null,
+        scenario: 'away',
+        idle: true,
+      },
       notifications: [],
       storageAvailable: true,
     };
@@ -154,13 +100,12 @@ async function pollHardware() {
       state = parsed;
   } catch {}
   if (!state) state = makeInitialState();
-  state.samples = [];
   if (
-    ![CONFIG.hardware.reminderMs, CONFIG.hardware.everydayReminderMs].includes(
+    ![CONFIG.preview.reminderMs, CONFIG.preview.everydayReminderMs].includes(
       state.settings.reminderMs,
     )
   ) {
-    state.settings.reminderMs = CONFIG.hardware.reminderMs;
+    state.settings.reminderMs = CONFIG.preview.reminderMs;
     state.active.reminderSent = false;
   }
   // Keep existing history and preferences while migrating the earlier visual demo.
@@ -171,10 +116,239 @@ async function pollHardware() {
       .replace(/five-minute|5-minute/g, '10-second')
       .replace(/five minutes|5 minutes/g, '10 seconds'),
   }));
+  // Keep browser-preview records separate from Python history.
+  const previewState = state;
+  let sourceMode = 'preview';
+  let backendData = null;
+  let backendAvailable = false;
+  let serverOffset = 0;
+  let liveReminderKey = null;
+
+  function showSampleStatistics() {
+    window.SitSyncConnection.preview();
+    // Disposable demo state: never save sample rows into browser or Python history.
+    state = makeInitialState();
+    state.sampleDemo = true;
+    state.settings = { ...previewState.settings };
+    for (let day = 0; day < 7; day += 1) {
+      const anchor = new Date(now());
+      anchor.setDate(anchor.getDate() - day);
+      const minutesAvailable = anchor.getHours() * 60 + anchor.getMinutes();
+      const count = Math.min(5 + (day % 3), Math.floor(minutesAvailable / 50));
+      for (let index = 0; index < count; index += 1) {
+        const end = anchor.getTime() - (index * 50 + 5) * 60000;
+        const duration = (24 + ((day * 7 + index * 3) % 17)) * 60000;
+        const start = end - duration;
+        const pause = start + 12 * 60000;
+        state.sessions.push({
+          ...makeSession(start),
+          id: 'sample-' + day + '-' + index,
+          end,
+          seatedMs: duration - 8000,
+          seatedSince: null,
+          intervals: [
+            { start, end: pause },
+            { start: pause + 8000, end },
+          ],
+          breaks: [{ start: pause, end: pause + 8000 }],
+          sample: true,
+          source: 'sample',
+        });
+      }
+    }
+    renderAll();
+    toast('Sample statistics loaded. Connect Python to show real hardware sessions.');
+  }
+  function usingBackend() {
+    return sourceMode === 'live';
+  }
+  function backendFresh() {
+    return (
+      backendAvailable &&
+      backendData?.sensor_connected &&
+      now() - (backendData.last_reading_at * 1000 + serverOffset) < 3000
+    );
+  }
+  function backendDate(value) {
+    const timestamp = new Date(String(value).replace(' ', 'T')).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
+  function applyBackendData(data) {
+    backendData = data;
+    backendAvailable = true;
+    serverOffset = now() - (data.server_timestamp || now() / 1000) * 1000;
+    const settings = state.settings;
+    const records = (data.session_history || data.history || []).flatMap((record, index) => {
+      const start = backendDate(record.start_time),
+        end = backendDate(record.end_time);
+      if (start === null || end === null || !Number.isFinite(record.duration_seconds)) return [];
+      return [
+        {
+          id: 'python-' + start + '-' + index,
+          start,
+          end,
+          seatedMs: record.duration_seconds * 1000,
+          seatedSince: null,
+          awaySince: null,
+          intervals: [{ start, end }],
+          breaks: [],
+          sample: false,
+          source: 'python',
+        },
+      ];
+    });
+    const closed = data.status === 'Standing';
+    const started = data.start_timestamp ? data.start_timestamp * 1000 + serverOffset : now();
+    const reminderKey = data.continuous_start || null;
+    state = {
+      ...previewState,
+      settings,
+      sessions: records,
+      samples: [],
+      active: {
+        ...makeSession(started),
+        id: 'python-active-' + started,
+        end: closed ? now() : null,
+        seatedMs: data.session_seconds * 1000,
+        seatedSince: null,
+        awaySince:
+          data.status === 'Paused (Break)'
+            ? data.away_since
+              ? data.away_since * 1000 + serverOffset
+              : now()
+            : null,
+        lastReset: data.continuous_start ? data.continuous_start * 1000 + serverOffset : now(),
+        reminderSent: reminderKey !== null && reminderKey === liveReminderKey,
+        source: 'python',
+        idle: closed,
+        intervals: [],
+        breaks: [],
+      },
+    };
+    renderAll();
+  }
+  function renderConnection() {
+    $('weeklyDataCaption').textContent =
+      state.sampleDemo && !usingBackend()
+        ? 'Sample statistics for demonstration. These are not measured hardware sessions.'
+        : state.sessions.length
+          ? 'Recorded sessions from the selected data source. Empty days stay empty.'
+          : 'No saved sessions yet. Choose Show sample data to preview a populated week, or use live data to track your cushion.';
+    for (const view of ['sessions', 'insights']) {
+      let notice = document.getElementById(view + 'SampleNotice');
+      if (!notice) {
+        notice = document.createElement('p');
+        notice.id = view + 'SampleNotice';
+        notice.className = 'source-panel';
+        notice.textContent =
+          'SAMPLE DATA · Illustrative statistics. Connect Python from Overview to show real hardware sessions.';
+        $('view-' + view).prepend(notice);
+      }
+      notice.hidden = !state.sampleDemo || usingBackend();
+      notice.style.display = notice.hidden ? 'none' : '';
+    }
+    const label = usingBackend()
+      ? !backendAvailable
+        ? 'PYTHON DISCONNECTED'
+        : backendData?.demo_mode
+          ? 'PYTHON DEMO'
+          : backendFresh()
+            ? 'LIVE SENSOR'
+            : 'WAITING FOR ESP32'
+      : state.sampleDemo
+        ? 'SAMPLE DATA · DEMO'
+        : 'BROWSER PREVIEW';
+    $('sourceLabel').textContent = label;
+    $('sourceLabel').closest('.source-panel').dataset.state =
+      usingBackend() && !backendFresh() ? 'waiting' : 'ready';
+    $('sourceDescription').textContent = usingBackend()
+      ? !backendAvailable
+        ? 'Run python main.py, then open http://127.0.0.1:8000.'
+        : backendData?.demo_mode
+          ? 'Simulated ADC from the Python server. No physical motor is driven.'
+          : backendFresh()
+            ? 'One FSR input from Python. The hardware controls occupancy.'
+            : backendData?.serial_error ||
+              'Python is reachable, but no recent ESP32 reading is available.'
+      : state.sampleDemo
+        ? 'Illustrative statistics only. Connect Python for actual hardware records.'
+        : 'Manual simulation only. Your real session history stays separate.';
+    $('dataSourceValue').textContent = label;
+    $('hardwareConnectionValue').textContent =
+      usingBackend() && backendFresh() && !backendData.demo_mode
+        ? 'Receiving serial readings'
+        : 'No live hardware signal';
+    $('sourceHealth').textContent = usingBackend()
+      ? backendFresh()
+        ? 'Receiving'
+        : 'Waiting'
+      : 'Preview';
+    $('sourceHealthLabel').textContent = 'Data source';
+    $('signalSourceCaption').textContent = usingBackend()
+      ? backendData?.demo_mode
+        ? 'Python-demo signal'
+        : 'Signal from Python'
+      : 'Browser-preview signal';
+    $('rawSignalLabel').textContent = usingBackend() ? 'RAW ADC FROM PYTHON' : 'SIMULATED RAW ADC';
+    $('liveConnectButton').textContent = usingBackend() ? 'Reconnect' : 'Connect Python';
+    document.querySelectorAll('[data-scenario]').forEach((button) => {
+      button.disabled = usingBackend();
+    });
+    document.querySelectorAll('[data-action="haptic"]').forEach((button) => {
+      button.disabled =
+        state.active.end !== null ||
+        state.active.awaySince !== null ||
+        (usingBackend() && !backendFresh());
+      button.textContent = usingBackend() ? 'Send reminder' : 'Preview pattern';
+    });
+    $('historySourceLabel').textContent = usingBackend()
+      ? 'Python session log'
+      : state.sampleDemo
+        ? 'Sample sessions · illustrative data'
+        : 'Your browser-preview sessions';
+    $('todaySourceLabel').textContent = usingBackend()
+      ? 'PYTHON DATA'
+      : state.sampleDemo
+        ? 'SAMPLE DATA'
+        : 'PREVIEW DATA';
+    $('secondStatLabel').textContent = usingBackend() ? 'Saved sessions today' : 'Movement breaks';
+    $('averageStatLabel').textContent = usingBackend()
+      ? 'Average saved session'
+      : 'Average sitting stretch';
+    $('timelineSeatedLabel').textContent = usingBackend() ? 'Session window' : 'Seated';
+    $('timelineBreakLegend').hidden = usingBackend();
+    $('timelineAwayLabel').textContent = usingBackend() ? 'No session recorded' : 'Away';
+    $('previewControls').hidden = usingBackend();
+  }
+  window.addEventListener('sitsync-connection', (event) => {
+    const { kind, data } = event.detail;
+    if (kind === 'preview') {
+      const settings = state.settings;
+      sourceMode = 'preview';
+      state = previewState;
+      state.settings = settings;
+      backendAvailable = false;
+      backendData = null;
+      stopHapticPreview();
+      reconcile();
+      renderAll();
+    } else {
+      sourceMode = 'live';
+      if (kind === 'data') applyBackendData(data);
+      else {
+        backendAvailable = false;
+        stopHapticPreview();
+        renderAll();
+      }
+    }
+  });
+
   let storageWarningShown = false;
   function save() {
+    if (state.sampleDemo) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const stored = usingBackend() ? { ...previewState, settings: state.settings } : state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     } catch {
       state.storageAvailable = false;
       if (!storageWarningShown) {
@@ -201,6 +375,7 @@ async function pollHardware() {
   }
   // Session lifecycle: count occupied time, pause, resume, and save.
   function seatedDuration(session, timestamp = now()) {
+    if (usingBackend()) return session.seatedMs;
     // Count only occupied time; a brief absence never adds to this total.
     return (
       session.seatedMs +
@@ -227,6 +402,7 @@ async function pollHardware() {
     return recorded;
   }
   function reconcile(timestamp = now()) {
+    if (usingBackend()) return;
     // The Python-style session buffer groups brief interruptions. It is separate
     // from the Arduino reminder, which restarts after every stand-up.
     const session = state.active;
@@ -254,8 +430,25 @@ async function pollHardware() {
     }
   }
   function setScenario(scenario) {
+    if (usingBackend()) return;
     if (!['seated', 'away'].includes(scenario)) return;
     reconcile();
+    if (usingBackend() && !backendFresh()) {
+      $('sessionTime').innerHTML = clock(
+        backendData?.session_seconds ? backendData.session_seconds * 1000 : 0,
+      )
+        .split(':')
+        .join('<span>:</span>');
+      $('sessionState').textContent = backendAvailable
+        ? 'Waiting for a sensor reading.'
+        : 'Python connection unavailable.';
+      $('timerCaption').textContent = 'Timer is not advancing without fresh sensor data';
+      $('resetLabel').textContent = 'No current hardware signal';
+      $('resetTime').textContent = 'Waiting';
+      $('sessionNote').textContent =
+        'Browser simulation will never replace a lost live signal automatically.';
+      return;
+    }
     const timestamp = now(),
       session = state.active;
     if (scenario === 'away') {
@@ -267,7 +460,7 @@ async function pollHardware() {
       session.breaks.push({ start: timestamp, end: null });
       session.scenario = 'away';
       session.reminderSent = false;
-      stopHapticPreview();
+      motorReleaseSince = timestamp;
       toast('Seat released. Your session stays open for 10 seconds.');
       notify(
         'A little room to move',
@@ -289,6 +482,7 @@ async function pollHardware() {
         toast('Welcome back. Same session, fresh perspective.');
       }
       state.active.scenario = scenario;
+      motorReleaseSince = null;
     }
     save();
     renderAll();
@@ -297,7 +491,7 @@ async function pollHardware() {
     return dayKey(session.start) === today();
   }
   function completedToday() {
-    return [...state.samples, ...state.sessions].filter(sessionToday);
+    return state.sessions.filter(sessionToday);
   }
   function breakCount() {
     return (
@@ -330,8 +524,13 @@ async function pollHardware() {
       .toLocaleDateString([], { month: 'short', day: 'numeric' })
       .toUpperCase();
     const localStatus = document.querySelector('.local-status');
-    localStatus.lastChild.textContent =
-      state.storageAvailable === false ? ' Session memory only' : ' Stored on your device';
+    localStatus.lastChild.textContent = usingBackend()
+      ? backendAvailable
+        ? ' Python connection'
+        : ' Python unavailable'
+      : state.storageAvailable === false
+        ? ' Session memory only'
+        : ' Browser preview';
   }
   function updateTimer() {
     reconcile();
@@ -347,7 +546,7 @@ async function pollHardware() {
       : away
         ? 'A little space to reset.'
         : 'Settled in. Stay mindful.';
-    $('sessionDot').style.background = away ? '#d9c58d' : '#d6edaa';
+    $('sessionDot').style.background = away ? '#d9c58d' : '#afcce8';
     $('timerCaption').textContent = closed
       ? 'Sit down to start your next session'
       : away
@@ -356,12 +555,16 @@ async function pollHardware() {
     const elapsed = timestamp - (session.lastReset || timestamp);
     let progress = 0;
     if (closed) {
-      $('resetLabel').textContent =
-        session.recorded === false ? 'Brief pressure ignored' : 'Your session has been saved';
+      $('resetLabel').textContent = session.idle
+        ? 'Ready for a new session'
+        : session.recorded === false
+          ? 'Brief pressure ignored'
+          : 'Your session has been saved';
       $('resetTime').textContent = 'Ready when you are';
       $('resetTime').style.fontSize = '17px';
-      $('sessionNote').textContent =
-        session.recorded === false
+      $('sessionNote').textContent = session.idle
+        ? 'Sit down on the cushion, or use Sit down in browser preview.'
+        : session.recorded === false
           ? 'Sessions under 3 seconds are not saved. Your next session begins when you sit down.'
           : 'Your next session begins automatically when you sit down.';
     } else if (away) {
@@ -372,7 +575,9 @@ async function pollHardware() {
         'A 10-second buffer handles a brief interruption. Time away is excluded; longer breaks end this session.';
       progress = Math.min(100, ((timestamp - session.awaySince) / GRACE_MS) * 100);
     } else {
-      const interval = state.settings.reminderMs;
+      const interval = usingBackend()
+        ? (backendData.reminder_seconds || 20) * 1000
+        : state.settings.reminderMs;
       $('resetLabel').textContent =
         elapsed >= interval ? 'Your reminder is due' : 'Your next reminder preview';
       $('resetTime').textContent =
@@ -380,20 +585,21 @@ async function pollHardware() {
       $('resetTime').style.fontSize = '';
       $('sessionNote').textContent =
         elapsed >= interval
-          ? 'One 0.8-second pulse per continuous sit. Stand up to reset the reminder.'
-          : interval === CONFIG.hardware.reminderMs
-            ? '20-second firmware demo: one pulse per continuous sit. This page only previews the reminder.'
-            : '30-minute browser preview. This does not change the uploaded firmware’s 20-second setting.';
+          ? 'Pattern: 500 ms on / 500 ms off. Five continuous seconds away stop it.'
+          : usingBackend()
+            ? 'Python schedules the hardware cue, even when this page is closed.'
+            : 'Browser preview simulates the cue; connect Python for hardware.';
       progress = Math.min(100, (elapsed / interval) * 100);
       if (elapsed >= interval && !session.reminderSent) {
         session.reminderSent = true;
+        if (usingBackend()) liveReminderKey = backendData.continuous_start;
         if (state.settings.reminders) {
           toast('A little movement is due. Stand up, stretch, and make some space.');
           notify(
             'Time for a little reset',
-            'Your reminder preview is due. The firmware uses one 800 ms pulse per continuous sit.',
+            'Your movement cue is due. Motor pattern: 500 ms on/off until five continuous seconds away.',
           );
-          animateHaptic();
+          if (!usingBackend()) animateHaptic();
         }
         save();
       }
@@ -410,8 +616,11 @@ async function pollHardware() {
     $('totalSeated').textContent = shortDuration(total);
     const count = completed.length + (closed ? 0 : 1);
     $('sessionCount').textContent = count;
-    const stretches = completed.flatMap((s) => s.intervals.map((i) => i.end - i.start));
-    if (!closed) {
+    // Python logs occupied duration, but does not retain each short break's timestamps.
+    const stretches = usingBackend()
+      ? completed.map((s) => s.seatedMs)
+      : completed.flatMap((s) => s.intervals.map((i) => i.end - i.start));
+    if (!usingBackend() && !closed) {
       stretches.push(...session.intervals.map((i) => i.end - i.start));
       if (session.seatedSince !== null) stretches.push(timestamp - session.seatedSince);
     }
@@ -421,47 +630,53 @@ async function pollHardware() {
         : 0) + '<span> min</span>';
   }
   function renderOccupancy() {
-  const session = state.active;
-  const usingHardware = liveHardware !== null;
-
-  const status = usingHardware
-    ? liveHardware.status
-    : session.end !== null
-      ? 'Standing'
-      : session.awaySince !== null
-        ? 'Paused (Break)'
-        : 'Sitting';
-
-  const away = status !== 'Sitting';
-  const scenario = away ? 'away' : 'seated';
-
-  const signal = usingHardware
-    ? Number(liveHardware.raw_adc) || 0
-    : away
-      ? DEMO_AWAY_SIGNAL
-      : DEMO_FSR_SIGNAL;
-
-  const signalPercent = (signal / DEMO_SIGNAL_MAX) * 100;
-  const detected = signal >= PRESSURE_THRESHOLD;
+    // One FSR reports occupancy. It does not report where weight is distributed.
+    const session = state.active,
+      away = session.end !== null || session.awaySince !== null;
+    const scenario = away ? 'away' : 'seated';
+    const signal = usingBackend()
+      ? backendFresh()
+        ? backendData.raw_adc
+        : 0
+      : away
+        ? DEMO_AWAY_SIGNAL
+        : DEMO_FSR_SIGNAL;
+    const signalPercent = (signal / DEMO_SIGNAL_MAX) * 100;
+    const detected = signal >= PRESSURE_THRESHOLD;
+    const status =
+      usingBackend() && !backendFresh()
+        ? 'No signal'
+        : session.end !== null
+          ? 'Standing'
+          : away
+            ? 'Paused (Break)'
+            : 'Sitting';
     const badge = $('occupancyBadge');
     badge.classList.toggle('away', away);
     badge.innerHTML = '<i></i>' + status;
     $('cushionStage').classList.toggle('away', away);
     $('occupancyCaption').textContent = away ? 'Seat released' : 'Pressure detected';
-    $('seatDetection').textContent = detected ? 'Detected' : 'Not detected';
-    $('fsrSignal').innerHTML = signal + '<span> ADC</span>';
+    $('seatDetection').textContent =
+      usingBackend() && !backendFresh() ? 'Unknown' : detected ? 'Detected' : 'Not detected';
+    $('fsrSignal').innerHTML =
+      usingBackend() && !backendFresh() ? '—' : signal + '<span> ADC</span>';
     $('fsrSignalFill').style.width = signalPercent + '%';
     $('fsrSignalTrack').setAttribute('aria-valuemax', String(DEMO_SIGNAL_MAX));
     $('fsrSignalTrack').setAttribute('aria-valuenow', String(signal));
     $('fsrSignalTrack').setAttribute(
       'aria-valuetext',
-      signal + ' ADC, simulated FSR signal. Sitting threshold: ' + PRESSURE_THRESHOLD + ' ADC.',
+      signal +
+        ' ADC. ' +
+        (usingBackend() ? 'Python sensor data. ' : 'Browser preview. ') +
+        'Sitting threshold: ' +
+        PRESSURE_THRESHOLD +
+        ' ADC.',
     );
     $('fsrThresholdMarker').style.left = (PRESSURE_THRESHOLD / DEMO_SIGNAL_MAX) * 100 + '%';
     $('sensorList').innerHTML = `
   <div class="sensor-row">
    <div class="sensor-label">
-    <span>FSR 01 · ${usingHardware ? 'live raw ADC' : 'simulated raw ADC'}</span>
+    <span>FSR 01 · raw ADC</span>
     <b>${signal} ADC</b>
    </div>
    <div class="sensor-bar"><i style="width:${signalPercent}%"></i></div>
@@ -492,31 +707,37 @@ async function pollHardware() {
       (_, i) => '<i class="' + (i < count ? 'filled' : '') + '"></i>',
     ).join('');
     $('breakDots').setAttribute('aria-label', count + ' of ' + goal + ' movement breaks');
-    $('winText').textContent =
-      'You made room for ' + count + ' ' + (count === 1 ? 'break' : 'breaks') + ' today.';
+    if (usingBackend()) {
+      $('movementCount').textContent = String(completedToday().length);
+      $('movementHint').textContent = 'Completed records from Python';
+      $('breakDots').innerHTML = '';
+    }
+    $('winText').textContent = usingBackend()
+      ? 'Session history comes from the Python log.'
+      : 'You made room for ' + count + ' ' + (count === 1 ? 'break' : 'breaks') + ' today.';
   }
-  // Timeline, sample weekly chart, and session-history table.
-  const weekValues = [4, 6, 3, 5, 7, 2, 4];
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6 + i);
-    return d.toLocaleDateString([], { weekday: 'short' });
-  });
+  // Timeline, recorded weekly sessions, and the session-history table.
   function weekHTML(compact = false) {
-    return weekValues
+    const values = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - 6 + index);
+      const key = dayKey(date);
+      const records = state.sessions.filter((s) => dayKey(s.start) === key);
+      return {
+        label: date.toLocaleDateString([], { weekday: 'short' }),
+        count: records.length,
+      };
+    });
+    const max = Math.max(1, ...values.map((value) => value.count));
+    return values
       .map(
-        (n, i) =>
-          '<div class="week-col">' +
-          (compact ? '' : '<b>' + n + '</b>') +
-          '<div class="week-bar" style="height:' +
-          Math.round((n / 8) * 78) +
-          '%" title="' +
-          weekDays[i] +
-          ': ' +
-          n +
-          ' sample movement breaks"></div><span>' +
-          weekDays[i] +
-          '</span></div>',
+        (value) => `
+      <div class="week-col">
+        ${compact ? '' : '<b>' + value.count + '</b>'}
+        <div class="week-bar" style="height:${(value.count / max) * 78}%"
+             title="${value.label}: ${value.count} saved sessions"></div>
+        <span>${value.label}</span>
+      </div>`,
       )
       .join('');
   }
@@ -535,7 +756,7 @@ async function pollHardware() {
       if (active.seatedSince !== null)
         intervals.push({
           start: active.seatedSince,
-          end: Math.max(timestamp, active.seatedSince + 15000),
+          end: timestamp,
           live: true,
         });
     }
@@ -556,7 +777,7 @@ async function pollHardware() {
           '%;width:' +
           Math.max(0.5, position(i.end) - position(i.start)) +
           '%" title="' +
-          (i.live ? 'Current demo session' : 'Sample / demo seated period') +
+          (i.live ? 'Current session' : 'Recorded session window') +
           ' · ' +
           timeLabel(i.start) +
           ' · ' +
@@ -591,11 +812,9 @@ async function pollHardware() {
       '</div>';
   }
   function renderSessions() {
-    // Samples stay clearly labeled and separate from completed demo activity.
+    // Identify each session's source and keep unfinished sessions clearly labeled.
     const active = state.active.end === null ? [state.active] : [];
-    let sessions = [...active, ...state.sessions, ...state.samples].sort(
-      (a, b) => b.start - a.start,
-    );
+    let sessions = [...active, ...state.sessions].sort((a, b) => b.start - a.start);
     if (sessionFilter === 'completed') sessions = sessions.filter((s) => s.end !== null);
     $('sessionRows').innerHTML = sessions.length
       ? sessions
@@ -606,7 +825,11 @@ async function pollHardware() {
               '<tr><td>' +
               (current ? 'Current session' : 'Sitting session') +
               '<small>' +
-              (s.sample ? 'Illustrative sample' : 'Interactive demo') +
+              (s.sample
+                ? 'Sample data'
+                : s.source === 'python'
+                  ? 'Python log'
+                  : 'Browser preview') +
               '</small></td><td>' +
               escapeHTML(timeLabel(s.start)) +
               '<small>' +
@@ -616,7 +839,7 @@ async function pollHardware() {
               '</small></td><td>' +
               durationDetail(current ? seatedDuration(s) : s.seatedMs) +
               '</td><td>' +
-              breaks +
+              (s.source === 'python' ? 'Not logged' : breaks) +
               '</td><td><span class="row-badge ' +
               (current ? 'current' : '') +
               '">' +
@@ -640,6 +863,8 @@ async function pollHardware() {
     renderStats();
     renderChart();
     renderSessions();
+    renderConnection();
+    $('weeklyChart').innerHTML = weekHTML();
   }
   function route() {
     // Hash links keep this build usable directly from index.html without a server.
@@ -669,7 +894,7 @@ async function pollHardware() {
       else link.removeAttribute('aria-current');
     });
     $('breadcrumb').textContent = labels[currentView];
-    document.title = 'SitWell — ' + labels[currentView];
+    document.title = 'SitSync — ' + labels[currentView];
     if (currentView === 'settings') fillSettings();
     renderAll();
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -680,9 +905,9 @@ async function pollHardware() {
     const active = state.active.end === null ? [state.active] : [];
     const rows = [
       ['id', 'source', 'started_at', 'ended_at', 'seated_seconds', 'completed_breaks', 'status'],
-      ...[...state.samples, ...state.sessions, ...active].map((s) => [
+      ...[...state.sessions, ...active].map((s) => [
         s.id,
-        s.sample ? 'illustrative sample' : 'interactive demo',
+        s.sample ? 'sample data' : s.source === 'python' ? 'python' : 'browser preview',
         new Date(s.start).toISOString(),
         s.end === null ? '' : new Date(s.end).toISOString(),
         Math.floor((s.end === null ? seatedDuration(s) : s.seatedMs) / 1000),
@@ -696,7 +921,8 @@ async function pollHardware() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'sitwell-sessions-' + today() + '.csv';
+    anchor.download =
+      (state.sampleDemo ? 'sitsync-SAMPLE-sessions-' : 'sitsync-sessions-') + today() + '.csv';
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('Your session history has been exported as a CSV.');
@@ -738,13 +964,15 @@ async function pollHardware() {
     );
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'sitwell-demo-sessions.json';
+    anchor.download = usingBackend()
+      ? 'sitsync-python-sessions.json'
+      : 'sitsync-preview-sessions.json';
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast(
       records.length
-        ? 'Completed demo sessions exported in your backend’s JSON format.'
-        : 'No completed demo sessions yet. Exported an empty JSON list; sample history was excluded.',
+        ? 'Completed sessions exported as JSON.'
+        : 'No completed sessions yet. Exported an empty JSON list.',
     );
   }
   let routineTimer = null;
@@ -764,7 +992,7 @@ async function pollHardware() {
   function showRoutine() {
     showDialog(
       'A MOMENT FOR YOURSELF',
-      '<div class="dialog-icon"><svg><use href="#i-leaf"/></svg></div><h2>Make a little space.</h2><p>A simple 60-second pause. Stand comfortably, relax your shoulders, and move in a way that feels good to you.</p><div class="routine-timer" id="routineTime">01:00</div><div class="routine-step" id="routineStep">A small pause. No perfect way to do it.</div><button class="button button-green" id="routineStart">Start my reset <svg><use href="#i-arrow"/></svg></button>',
+      '<div class="dialog-icon"><svg><use href="#i-leaf"/></svg></div><h2>Make a little space.</h2><p>A simple 60-second pause. Stand comfortably, relax your shoulders, and move in a way that feels good to you.</p><div class="routine-timer" id="routineTime">01:00</div><div class="routine-step" id="routineStep">A small pause. No perfect way to do it.</div><button class="button button-blue" id="routineStart">Start my reset <svg><use href="#i-arrow"/></svg></button>',
     );
     $('routineStart').addEventListener(
       'click',
@@ -801,23 +1029,67 @@ async function pollHardware() {
       { once: true },
     );
   }
-  // Simulate an 800 ms pulse. Arduino controls the physical motor separately.
-  let hapticTimeout;
+  // Current firmware: BUZZ starts a repeating 500ms on / 500ms off pattern.
+  // Five continuous seconds below the threshold stop it; this is not the 10s session buffer.
+  let motorStartedAt = null;
+  let motorReleaseSince = null;
   function stopHapticPreview() {
-    clearTimeout(hapticTimeout);
-    $('cushionStage').classList.remove('haptic-pulse');
+    motorStartedAt = null;
+    motorReleaseSince = null;
+    $('cushionStage').classList.remove('motor-on');
     $('motorPreviewStatus').textContent = 'Off';
   }
-  function animateHaptic() {
-    // This only animates the page. The physical motor is controlled by Arduino.
-    stopHapticPreview();
-    const stage = $('cushionStage');
-    void stage.offsetWidth; // Restart the CSS animation for a manual test pulse.
-    stage.classList.add('haptic-pulse');
-    $('motorPreviewStatus').textContent = 'Preview pulse · 800 ms';
-    hapticTimeout = setTimeout(stopHapticPreview, CONFIG.hardware.buzzDurationMs);
+  function updateMotorPreview() {
+    if (usingBackend()) {
+      if (!backendFresh() || !backendData.buzz_active) {
+        stopHapticPreview();
+        if (!backendFresh()) $('motorPreviewStatus').textContent = 'Unknown · no signal';
+        return;
+      }
+      motorStartedAt = backendData.buzz_started
+        ? backendData.buzz_started * 1000 + serverOffset
+        : now();
+    }
+    if (motorStartedAt === null) return;
+    if (
+      !usingBackend() &&
+      motorReleaseSince !== null &&
+      now() - motorReleaseSince >= CONFIG.hardware.breakDurationMs
+    ) {
+      stopHapticPreview();
+      return;
+    }
+    const cycle = CONFIG.hardware.vibrateMs + CONFIG.hardware.restMs;
+    const on = (now() - motorStartedAt) % cycle < CONFIG.hardware.vibrateMs;
+    $('cushionStage').classList.toggle('motor-on', on);
+    $('motorPreviewStatus').textContent = on ? 'Pulse on · 500 ms' : 'Rest · 500 ms';
+  }
+  async function animateHaptic() {
+    if (state.active.end !== null || state.active.awaySince !== null) return;
+    if (usingBackend()) {
+      try {
+        await window.SitSyncConnection.buzz();
+        toast(
+          backendData?.demo_mode
+            ? 'Python demo motor pattern started.'
+            : 'BUZZ command sent to ESP32.',
+        );
+      } catch (error) {
+        toast(error.message);
+      }
+      return;
+    }
+    if (motorStartedAt !== null) return;
+    motorStartedAt = now();
+    motorReleaseSince = null;
+    updateMotorPreview();
+    toast('Browser pattern preview. Stand for 5 continuous seconds to stop it.');
   }
   function showBreak() {
+    if (usingBackend()) {
+      showRoutine();
+      return;
+    }
     if (state.active.end !== null || state.active.awaySince !== null) {
       setScenario('seated');
       return;
@@ -825,7 +1097,7 @@ async function pollHardware() {
     setScenario('away');
     showDialog(
       'A MOMENT AWAY',
-      '<div class="dialog-icon"><svg><use href="#i-walk"/></svg></div><h2>A little room to move.</h2><p>Your seated timer is paused. The cushion holds this session for <strong>10 seconds</strong> to handle a brief interruption.</p><p>A washroom trip or longer break will usually end the session. Sitting again starts a fresh one. Time away never counts as sitting.</p><button class="button button-green" id="returnToSeat">I’m back — sit down <svg><use href="#i-arrow"/></svg></button>',
+      '<div class="dialog-icon"><svg><use href="#i-walk"/></svg></div><h2>A little room to move.</h2><p>Your seated timer is paused. The cushion holds this session for <strong>10 seconds</strong> to handle a brief interruption.</p><p>A washroom trip or longer break will usually end the session. Sitting again starts a fresh one. Time away never counts as sitting.</p><button class="button button-blue" id="returnToSeat">I’m back — sit down <svg><use href="#i-arrow"/></svg></button>',
     );
     $('returnToSeat').onclick = () => {
       setScenario('seated');
@@ -835,7 +1107,7 @@ async function pollHardware() {
   function showPrivacy() {
     showDialog(
       'PRIVATE BY DESIGN',
-      '<div class="dialog-icon"><svg><use href="#i-shield"/></svg></div><h2>Your space. Your data.</h2><p>Your demo sessions and preferences are stored in this browser. There are no accounts, analytics, external fonts, or cloud services in this frontend.</p><p>The cushion readings are simulated. Exported history labels sample records and demo activity separately. Hardware connection is the next integration step.</p><button class="button button-green" id="privacyExport">Export my session data <svg><use href="#i-download"/></svg></button>',
+      '<div class="dialog-icon"><svg><use href="#i-shield"/></svg></div><h2>Your data stays local.</h2><p>Your preferences and reading list stay in this browser. Python stores connected sessions in the local sessions.json file. Browser-preview sessions are kept separately.</p><p>There are no analytics or cloud accounts. The source label identifies hardware readings, Python demo readings, or browser preview.</p><button class="button button-blue" id="privacyExport">Export my session data <svg><use href="#i-download"/></svg></button>',
     );
     $('privacyExport').onclick = exportCSV;
   }
@@ -878,6 +1150,25 @@ async function pollHardware() {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action) {
       ({
+        'connect-live': () => window.SitSyncConnection.connect(),
+        'browser-preview': () => window.SitSyncConnection.preview(),
+        'sample-statistics': showSampleStatistics,
+        'python-demo': async () => {
+          try {
+            await window.SitSyncConnection.mode('demo');
+            toast('Python demo enabled.');
+          } catch (error) {
+            toast(error.message);
+          }
+        },
+        'python-live': async () => {
+          try {
+            await window.SitSyncConnection.mode('live');
+            toast('Hardware mode enabled.');
+          } catch (error) {
+            toast(error.message);
+          }
+        },
         export: exportCSV,
         'export-json': exportSessionsJSON,
         break: showBreak,
@@ -891,9 +1182,9 @@ async function pollHardware() {
           animateHaptic();
           notify(
             'Reminder preview',
-            'An 800 ms on-screen pulse. The actual motor is controlled by the ESP32 on GPIO 2.',
+            'BUZZ requests a 500 ms on/off pattern. Five continuous seconds away stop it.',
           );
-          toast('800 ms reminder preview. No physical motor is connected to this page.');
+          // The pattern controller reports whether this was a live command or a browser preview.
         },
       })[action]?.();
     }
@@ -959,9 +1250,6 @@ async function pollHardware() {
   fillSettings();
   route();
   save();
-  pollHardware();
-  ßsetInterval(pollHardware, 500);
-
   setInterval(() => {
     const closedBefore = state.active.end;
     updateTimer();
@@ -973,33 +1261,11 @@ async function pollHardware() {
     }
     if (currentView === 'sessions') renderSessions();
   }, 1000);
+  setInterval(updateMotorPreview, CONFIG.hardware.sampleIntervalMs);
+  if (location.protocol === 'http:' || location.protocol === 'https:')
+    window.SitSyncConnection.connect();
   setInterval(() => {
     renderChart();
     save();
   }, 10000);
-  async function loadJSONSessions() {
-    const response = await fetch('../backend/sessions.json');
-    const records = await response.json();
-
-    state.sessions = records.map((record, index) => {
-      const start = new Date(record.start_time.replace(' ', 'T')).getTime();
-      const end = new Date(record.end_time.replace(' ', 'T')).getTime();
-
-      return {
-        id: 'json-' + index,
-        start,
-        end,
-        seatedMs: record.duration_seconds * 1000,
-        seatedSince: null,
-        awaySince: null,
-        intervals: [{ start, end }],
-        breaks: [],
-        sample: false,
-      };
-    });
-
-    save();
-    renderAll();
-  }
-  loadJSONSessions();
 })();

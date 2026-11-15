@@ -1,5 +1,5 @@
 /**
- * SitWell field guide.
+ * SitSync field guide.
  * Article copy and sources come first; reading tools come after.
  * Saved reads and the checklist are separate from sitting-session storage.
  */
@@ -90,7 +90,7 @@
       title: 'Desk breaks and exercise belong on the same team.',
       body: 'WHO encourages both more physical activity and less sedentary time. Activity includes everyday movement such as walking, cycling, and wheeling—not only organized workouts.',
       nuance:
-        'SitWell’s break count measures your routine, not exercise intensity. Six breaks is a personal goal in this app, not a public-health target.',
+        'SitSync’s break count measures your routine, not exercise intensity. Six breaks is a personal goal in this app, not a public-health target.',
       action: 'Give your day room for small pauses and a broader activity routine.',
       source: 'who',
     },
@@ -147,7 +147,7 @@
       title: 'A simple signal. A clear purpose.',
       body: 'One force-sensitive resistor detects pressure at the seat. The signal helps estimate whether the cushion is occupied so the app can track seated time.',
       nuance:
-        'It cannot identify left/right balance, precise body weight, or posture. An object may trigger it. The supplied backend marks readings at or above 500 ADC as Sitting; the hardware team should verify that threshold. Current readings are simulated.',
+        'It cannot identify left/right balance, precise body weight, or posture. An object may trigger it. Readings at or above 500 ADC count as Sitting. Check the source label: live hardware, Python demo, and browser preview are different.',
       action:
         'Try sitting down and standing up in the demo. The useful change is occupied versus away.',
       source: null,
@@ -160,10 +160,11 @@
       number: 'YOUR',
       unit: 'PACE. YOUR CALL.',
       title: 'A reminder should fit your day.',
-      body: 'The Arduino demo gives one 800 ms pulse after 20 seconds of continuous sitting. Standing up rearms the reminder, even when Python keeps the same session open during its 10-second buffer.',
+      body: 'The current Arduino starts a repeating pattern when Python sends BUZZ: 500 ms on, then 500 ms off. Five continuous seconds below the pressure threshold stop the pattern.',
       nuance:
-        'The 20-second interval is for the hackathon, not a medically validated sitting limit. The code suggests 30 minutes for everyday use. Browser presets only change the preview; firmware controls the motor.',
-      action: 'Try a preview in My cushion. The FSR uses GPIO 36 and the motor output uses GPIO 2.',
+        'Python schedules hardware cues even when the webpage is closed; the firmware starts its pattern after BUZZ. Python’s separate 10-second buffer controls session grouping, not the five-second motor stop. The selected interval is not a medical sitting limit.',
+      action:
+        'Use My cushion to request a reminder. Live mode sends BUZZ; Python demo and browser preview do not drive physical hardware.',
       source: null,
     },
     {
@@ -207,7 +208,7 @@
       number: '03',
       upside: 'Makes occupancy, session timing, and reminders visible with less manual logging.',
       tradeoff:
-        'One FSR cannot measure left/right balance, precise body weight, or posture. This prototype uses simulated readings.',
+        'One FSR cannot measure left/right balance, precise body weight, or posture. Simulated readings are labeled separately from live hardware.',
       takeaway: 'An awareness tool, with you in control.',
       source: null,
     },
@@ -242,7 +243,7 @@
   ];
   let preferences = { saved: [], checks: [] };
   try {
-    const data = JSON.parse(localStorage.getItem('sitwell.learn.v1'));
+    const data = JSON.parse(localStorage.getItem('sitsync.learn.v1'));
     if (data && Array.isArray(data.saved) && Array.isArray(data.checks)) preferences = data;
   } catch {}
   // Preserve saved reads from the earlier prototype under the corrected topics.
@@ -252,7 +253,7 @@
   );
   function persist() {
     try {
-      localStorage.setItem('sitwell.learn.v1', JSON.stringify(preferences));
+      localStorage.setItem('sitsync.learn.v1', JSON.stringify(preferences));
       return true;
     } catch {
       return false;
@@ -266,7 +267,7 @@
           '" target="_blank" rel="noopener noreferrer">' +
           source.label +
           ' <span>↗</span></a>'
-      : '<span class="learn-product-label">' + icon('mat') + ' SitWell product note</span>';
+      : '<span class="learn-product-label">' + icon('mat') + ' SitSync product note</span>';
   }
   let filter = 'all',
     search = '';
@@ -381,7 +382,7 @@
         score +
         '<span> / ' +
         questions.length +
-        '</span></div><h2>A little wiser. A little more aware.</h2><p>Keep the nuance. Take the useful bits into your day.</p><button class="button button-green" id="restartLearnQuiz">One more go ' +
+        '</span></div><h2>A little wiser. A little more aware.</h2><p>Keep the nuance. Take the useful bits into your day.</p><button class="button button-blue" id="restartLearnQuiz">One more go ' +
         icon('arrow') +
         '</button></div>';
       return;
@@ -415,7 +416,7 @@
       question.explanation +
       '</p>' +
       sourceLink(question.source) +
-      '<button class="button button-green" id="nextLearnQuestion">' +
+      '<button class="button button-blue" id="nextLearnQuestion">' +
       (quizIndex === questions.length - 1 ? 'See my result' : 'Next little insight') +
       ' ' +
       icon('arrow') +

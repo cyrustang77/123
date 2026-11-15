@@ -1,7 +1,12 @@
 venv/
+.venv/
 __pycache__/
 node_modules/
 .env
 .DS_Store
+
+# Local sensor history and generated files are not shared with the team.
+sessions.json
 backend/sessions.json
-.venv/
+*.pyc
+.pytest_cache/

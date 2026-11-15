@@ -1,64 +1,89 @@
-# OnHacks Project
+# SitSync
 
-## SitWell frontend
+A blue dashboard with locally stored Quicksand fonts for the team's single-FSR ESP32 cushion. The frontend reads Python's live data, while browser preview remains a separate, clearly labeled option.
 
-Open `frontend/index.html` in your browser. No installation, build, internet connection, or backend is required.
+## Project layout
 
-For a local web server, run this from the project root:
-
-```sh
-python3 -m http.server 5173 --directory frontend
+```text
+backend/
+  main.py                       Python server, serial readings, timers and BUZZ
+  requirements.txt              Runtime dependencies
+  onhacks2026/onhacks2026.ino    ESP32 sketch (open this in Arduino IDE)
+frontend/                       Dashboard, learning content and local fonts
+tests/                          Simulated serial/API integration tests
+docs/ONHacks.pdf                 Hackathon reference document
+main.py                         Shortcut to backend/main.py
+requirements.txt                Installs backend requirements from the root
+requirements-dev.txt            Optional test dependencies
 ```
 
-Then visit http://localhost:5173.
+## Install and start
 
-### Try the demo
+From the project root:
 
-- Use **Sit down** and **Stand up** to simulate a single FSR detecting seat pressure.
-- The signal display uses the Arduino ADC range (0–4095), threshold 500, and example readings 2400 seated / 12 away.
-- The default reminder preview follows the Arduino demo: one 800 ms pulse after 20 seconds of continuous sitting. Standing up resets it immediately, even if the same session resumes within the buffer.
-- **Stand up** pauses seated time and starts a 10-second interruption buffer.
-- Return before 10 seconds to continue the same session. At 10 seconds away, the session closes; sitting again starts a new one.
-- A washroom trip or other longer break usually ends the session. All time away is excluded from seated time.
-- Explore session history, weekly insights, simulated device telemetry, reminder previews, and a timed 60-second reset.
-- Save your name, reminder preview preset, and break goal in Preferences. The 30-minute preset only changes the browser preview; it does not reprogram the ESP32.
-- Export a real CSV; illustrative sample history and interactive activity are labeled separately.
-- Export completed demo sessions as JSON in your teammate’s three-field format. This excludes samples, unfinished sessions, and sessions shorter than 3 seconds.
-- Open **Learn** for ten searchable fact cards with original-source links, saved reads, benefits and tradeoffs, a three-question myth quiz, a persistent desk checklist, and practical FAQs. The featured article summarizes Botlero et al. (2024), PMID 39053656, including its observational limitations. Reading lists and checklist choices stay in this browser.
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python backend/main.py
+```
 
-### Files
+On Windows, create the environment with `py -m venv .venv`, then activate it with `.venv\Scripts\activate`.
 
-- `frontend/index.html`: page structure, inline cushion illustration, and icons.
-- `frontend/config.js`: Arduino/Python settings in one place, with comments explaining each group.
-- `frontend/styles.css`: layout, colors, animations, and responsive styles.
-- `frontend/app.js`: session state, timing, navigation, browser storage, and demo interactions.
-- `frontend/learn.js`: educational content, source links, topic/search filters, saved reads, checklist, and quiz.
+Open **http://127.0.0.1:8000**. Both `python main.py` and `python backend/main.py` launch the same server. Close Arduino Serial Monitor before starting Python: only one program can own the board's serial port.
 
-The frontend remains a standalone simulation, as requested. Arduino and Python are references; the page does not read USB, call the backend, or control a real motor.
+Python discovers a single USB serial board automatically. If multiple devices are connected, set `SITSYNC_SERIAL_PORT` to the board's actual port (for example, `COM3` on Windows). Connection errors appear on the dashboard. Live Server on localhost can also reach the Python API, but opening the Python URL above is recommended.
 
-### Arduino and Python reference
+## Data sources
 
-| Setting                      | Value                               |
-| ---------------------------- | ----------------------------------- |
-| FSR input                    | GPIO 36 / ADC1                      |
-| Motor output                 | GPIO 2                              |
-| ADC range                    | 0–4095                              |
-| Sitting threshold            | 500                                 |
-| Serial baud rate             | 115200                              |
-| Normal sample interval       | 250 ms                              |
-| Hackathon reminder           | 20 seconds, once per continuous sit |
-| Motor pulse                  | 800 ms                              |
-| Everyday firmware suggestion | 30 minutes                          |
-| Python interruption buffer   | 10 seconds                          |
-| Minimum saved session        | 3 seconds                           |
+- **Live sensor:** Python has recent serial readings from the ESP32.
+- **Python demo:** simulated readings generated by Python; no physical motor is driven.
+- **Browser preview:** manual Sit down / Stand up controls, stored separately from Python history.
+- **Waiting / disconnected:** no valid current reading; the dashboard does not substitute simulated readings.
 
-The Arduino reminder and Python session buffer are independent. A brief stand-up resets the reminder immediately, while Python can retain the same session for up to 10 seconds. The Arduino's blocking 800 ms buzz also pauses serial readings during the pulse, so sampling is not perfectly constant.
+Opening `frontend/index.html` directly works as browser preview. For the Python connection, open the URL served by `main.py`.
 
-The supplied Python timer still counts a short absence when it resumes, because it uses time since the original start. This frontend excludes away time, as previously agreed; that difference remains to resolve before connecting the backend.
+Use My cushion to switch Python's demo/hardware mode after finishing the current session.
 
-### What is sessions.json?
+## Hardware and timing
 
-JSON is a plain-text format for structured records. In your teammate's code, `sessions.json` is a list of completed sessions, with these fields:
+Upload `backend/onhacks2026/onhacks2026.ino` using the ESP32 board configuration appropriate to your board. The firmware logic is unchanged. Close Serial Monitor after uploading, then start Python.
+
+| Setting               | Value                                      |
+| --------------------- | ------------------------------------------ |
+| Sensor                | One FSR on GPIO 36                         |
+| Motor output          | GPIO 2                                     |
+| Sitting threshold     | 500 ADC                                    |
+| ADC range             | 0–4095                                     |
+| Serial baud rate      | 115200                                     |
+| Sampling interval     | 250 ms                                     |
+| Motor start command   | `BUZZ\n`                                   |
+| Motor pattern         | 500 ms on, 500 ms off, repeating           |
+| Motor stops           | After 5 continuous seconds below threshold |
+| Python session buffer | 10 seconds                                 |
+| Minimum saved session | 3 seconds                                  |
+
+Python automatically sends `BUZZ` after 20 seconds of continuous sitting, including when the webpage is closed. Set `SITSYNC_REMINDER_SECONDS=1800` for a 30-minute interval. The browser preference controls browser preview only; connected mode displays Python's interval. The selected interval is not a medically validated sitting limit. The Arduino firmware itself is unchanged.
+
+A return before five seconds keeps an active motor pattern running. Five seconds away stops the motor pattern, while the same sitting session can remain open until ten seconds away. Return at or after ten seconds starts a new session. Time away is excluded from seated duration.
+
+Motor status is inferred from commands, not measured feedback from the motor.
+
+## Backend behavior
+
+The backend reads raw integer ADC lines at 115200 baud. It provides:
+
+1. Serving `frontend/index.html` and its assets from the correct directory.
+2. Fixing the session timer so resumed short breaks are not counted as sitting, and enforcing the ten-second deadline on return.
+3. Adding `POST /buzz` for the existing firmware command, plus current-session/freshness fields needed by the frontend.
+4. Automatic USB serial discovery and explicit connection errors.
+5. A 20-second reminder scheduled by Python, independent of the browser.
+
+The existing `history` field still returns the latest five records. `session_history` exposes the complete log so the dashboard can calculate real history rather than inventing daily statistics.
+
+## What is sessions.json?
+
+It is a plain-text list of completed sitting sessions. Python creates or updates it automatically when a qualifying session ends:
 
 ```json
 [
@@ -70,15 +95,45 @@ JSON is a plain-text format for structured records. In your teammate's code, `se
 ]
 ```
 
-Python creates the file automatically when it saves the first qualifying session. The path is relative to the folder where Python was started. You do not need to create the file manually.
+The file stays at the project root and is ignored by Git. Python creates it automatically; teammates do not need to create or copy it. Exports download a separate copy; they do not overwrite it. Browser-preview history and preferences stay in browser storage.
 
-The frontend stores its own demo in browser storage. Its JSON export downloads `sitwell-demo-sessions.json`; it does not overwrite the backend's `sessions.json`. The backend's `/data` route returns the latest five saved records even though the JSON file may contain more.
+## Frontend files
 
-### Keeping the code readable
+- `index.html`: accessible page structure, source controls, and cushion illustration.
+- `styles.css`: blue theme, layouts, and responsive styles.
+- `config.js`: constants matching the supplied Arduino/Python code.
+- `connection.js`: polling, connection state, mode requests, and BUZZ requests.
+- `app.js`: rendering, browser preview, session history, and exports.
+- `learn.js`: sourced information, benefits/tradeoffs, saved reads, quiz, and desk checklist.
 
-The frontend uses two-space indentation, consistent quotes and semicolons, and descriptive section comments. `.editorconfig` and `.prettierrc.json` keep those choices consistent.
+The Show sample data button loads clearly labeled, disposable demo statistics. Use live data switches back to Python records. Samples never enter `sessions.json`. A single FSR detects occupancy, not posture, body weight or left/right pressure. Educational content includes the supplied Botlero et al. (2024) paper with its observational limitations.
 
-To format it again:
+## Verify before sharing
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+Tests use a simulated serial board and do not drive the motor. Physical verification: confirm LIVE SENSOR, sit until ADC reaches 500 and the timer starts, wait 20 seconds for vibration, then stand for 5 seconds to stop vibration and 10 seconds to save the session.
+
+If port 8000 is already in use, stop the previous SitSync process before starting another. A COM3 error on macOS or a startup message saying SitWell indicates an older checkout. Run from this repository and install its requirements.
+
+## Commit and share
+
+From this checkout, review `git status` and `git diff`, then:
+
+```sh
+git add backend frontend docs tests main.py requirements.txt requirements-dev.txt README.md .gitignore .gitattributes .editorconfig .prettierrc.json
+git commit -m "Organize SitSync dashboard and ESP32 integration"
+git push
+```
+
+Teammates should pull this commit into their checkout, install the requirements in their own virtual environment, and use the start command above. Virtual environments, local readings and caches are intentionally not committed.
+
+## Formatting
+
+`.editorconfig` and `.prettierrc.json` define consistent spacing and formatting.
 
 ```sh
 npx prettier@3.6.2 --write "frontend/*.{html,css,js}"
