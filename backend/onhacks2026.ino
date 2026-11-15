@@ -1,5 +1,4 @@
-
- // --- PIN DEFINITIONS ---
+// --- PIN DEFINITIONS ---
 const int FSR_PIN = 36;
 const int MOTOR_PIN = 2;
 
