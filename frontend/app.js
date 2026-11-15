@@ -935,7 +935,7 @@
     save();
   }, 10000);
   async function loadJSONSessions() {
-    const response = await fetch('../session.json');
+    const response = await fetch('../sessions.json');
     const records = await response.json();
 
     state.sessions = records.map((record, index) => {
