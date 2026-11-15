@@ -15,6 +15,7 @@ BAUD_RATE = 115200
 PRESSURE_THRESHOLD = 500       # Must match threshold in Arduino code
 INTERRUPTION_BUFFER_SEC = 10   # 10s grace period for brief breaks (600 for 10 mins)
 JSON_FILE = "sessions.json"
+REMINDER_INTERVAL_SEC = 30
 
 # --- LIVE STATE ---
 state = {
@@ -25,6 +26,7 @@ state = {
     "session_start": None,
     "start_timestamp": None,
     "away_since": None
+    "reminder_sent": False,
 }
 
 last_printed_status = None
@@ -50,7 +52,7 @@ def log_session(start_time, duration_sec):
         json.dump(sessions, f, indent=2)
     print(f"[SAVED] Logged {duration_sec}s session to {JSON_FILE}")
 
-def process_adc_reading(adc_val):
+def process_adc_reading(adc_val, ser=None):
     """Core state machine + live terminal status output."""
     global last_printed_status, last_heartbeat
     state["raw_adc"] = adc_val
@@ -63,10 +65,22 @@ def process_adc_reading(adc_val):
             state["status"] = "Sitting"
             state["session_start"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             state["start_timestamp"] = now
+            state["reminder_sent"] = False
         elif state["status"] == "Paused (Break)":
             state["status"] = "Sitting"
 
         state["session_seconds"] = int(now - state["start_timestamp"])
+        # Send reminder once after 30 seconds
+        if (state["session_seconds"] >= REMINDER_INTERVAL_SEC
+                and not state["reminder_sent"]
+                and ser is not None
+                and ser.is_open):
+        
+            ser.write(b"BUZZ\n")
+            ser.flush()
+        
+            state["reminder_sent"] = True
+            print("[REMINDER] BUZZ command sent to ESP32!")
     else:
         # No weight -> Handle interruption buffer
         if state["status"] == "Sitting":
@@ -80,6 +94,7 @@ def process_adc_reading(adc_val):
                 state["session_start"] = None
                 state["start_timestamp"] = None
                 state["away_since"] = None
+                state["reminder_sent"] = False
 
     # --- LIVE VS CODE TERMINAL OUTPUT ---
     # Prints immediately on state change, plus a heartbeat every 2 seconds
@@ -109,7 +124,7 @@ def sensor_loop():
 
             elapsed = (time.time() - demo_cycle_start) % 28
             fake_adc = random.randint(2200, 2600) if elapsed < 15 else random.randint(0, 30)
-            process_adc_reading(fake_adc)
+            process_adc_reading(fake_adc, None)
             time.sleep(0.25)
 
         else:
@@ -120,7 +135,7 @@ def sensor_loop():
 
                 line = ser.readline().decode("utf-8", errors="ignore").strip()
                 if line.isdigit():
-                    process_adc_reading(int(line))
+                    process_adc_reading(int(line), ser)
 
             except Exception as e:
                 if ser:
